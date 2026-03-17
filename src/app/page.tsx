@@ -104,13 +104,15 @@ function Dashboard() {
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              background: isDark ? '#1a1a1a' : '#ffffff',
-              border: `1px solid ${isDark ? '#2e2e2e' : '#e0e0e0'}`,
+              background: '#c8a951',
+              borderTop: '1px solid #b8962f',
+              borderBottom: '1px solid #b8962f',
+              borderLeft: '1px solid #b8962f',
               borderRight: 'none',
               borderRadius: '6px 0 0 6px',
               cursor: 'pointer',
-              color: isDark ? '#888888' : '#666666',
-              boxShadow: isDark ? '-2px 0 8px rgba(0,0,0,0.4)' : '-2px 0 8px rgba(0,0,0,0.08)',
+              color: '#1a1200',
+              boxShadow: isDark ? '-2px 0 8px rgba(0,0,0,0.4)' : '-2px 0 8px rgba(0,0,0,0.12)',
             }}
           >
             {statsVisible ? <ChevronRight size={11} /> : <ChevronLeft size={11} />}

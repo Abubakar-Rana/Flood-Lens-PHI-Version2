@@ -199,23 +199,8 @@ export default function Sidebar({
           </div>
         </div>
 
-        {/* ── Risk Level Legend ── */}
-        <div style={{ borderTop: `1px solid ${border}`, paddingTop: 16 }}>
-          <div className="flex items-center justify-between mb-3">
-            <span style={{ color: textMuted, fontSize: 10, letterSpacing: '0.07em', fontWeight: 600 }}>RISK LEVEL</span>
-          </div>
-          <div className="space-y-2">
-            {RISK_LEGEND_COLORS.map(item => (
-              <div key={item.label} className="flex items-center gap-2.5">
-                <div className="w-5 h-5 rounded-md flex-shrink-0" style={{ background: isDark ? item.dark : item.light }} />
-                <span style={{ color: textSecond, fontSize: 12 }}>{item.label}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* ── Region Search ── */}
-        <div style={{ borderTop: `1px solid ${border}`, paddingTop: 16 }}>
+        {/* ── Region Search ── HIDDEN FOR V1 — restore by removing the comment wrapper below */}
+        {/* <div style={{ borderTop: `1px solid ${border}`, paddingTop: 16 }}> */} {false && <div style={{ borderTop: `1px solid ${border}`, paddingTop: 16 }}>
           <div className="flex items-center gap-2 mb-3">
             <MapPin size={12} style={{ color: '#f59e0b' }} />
             <span style={{ color: textMuted, fontSize: 10, letterSpacing: '0.07em', fontWeight: 600 }}>SELECT REGION</span>
@@ -306,7 +291,7 @@ export default function Sidebar({
               );
             })}
           </div>
-        </div>
+        </div> /* end region search */} {/* end HIDDEN region search */}
       </div>
 
       {/* ── Footer ── */}
