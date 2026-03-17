@@ -7,7 +7,7 @@ import {
   RotateCcw, Stethoscope, Info, BarChart3,
 } from 'lucide-react';
 import { SelectedRegion, RiskData, RiskType, RISK_TYPE_CONFIG } from '@/lib/types';
-import { getRiskColor, getRiskLabel, formatPopulation, getAQICategory, generateTimeSeriesData } from '@/lib/utils';
+import { getRiskColor, getRiskLabel, formatPopulation } from '@/lib/utils';
 import TrendChart from './TrendChart';
 import { useTheme } from '@/lib/theme';
 
@@ -22,6 +22,17 @@ interface StatsPanelProps {
 type Tab = 'scores' | 'indicators' | 'trends' | 'model';
 
 const CONFIDENCE: Record<number, 'HIGH' | 'MEDIUM' | 'LOW'> = { 0: 'HIGH', 1: 'HIGH', 2: 'MEDIUM', 3: 'LOW' };
+
+/* Convert a 0-100 risk score to estimated population cases */
+function scoreToCases(score: number, population: number, riskType: RiskType): number {
+  if (riskType === 'flood')  return Math.round(population * score * 0.000012);
+  if (riskType === 'smog')   return Math.round(population * score * 0.000022);
+  /* respiratory */          return Math.round(population * score * 0.0000012);
+}
+function formatCases(n: number): string {
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
+  return n.toString();
+}
 
 /* Derive 3 month labels from today */
 function getMonthLabels(): [string, string, string] {
@@ -47,43 +58,25 @@ function MetricRow({ label, value, unit, color, isDark }: { label: string; value
 
 /* ── DIRE-style Prediction Card (time-period, single risk type) ── */
 function PredictionCard({
-  score, monthLabel, isCurrent, color, bg, isDark,
+  score, cases, monthLabel, isCurrent, color, isDark,
 }: {
-  score: number; monthLabel: string; isCurrent: boolean;
-  color: string; bg: string; isDark: boolean;
+  score: number; cases: number; monthLabel: string; isCurrent: boolean;
+  color: string; isDark: boolean;
 }) {
   const riskLvl = getRiskLabel(score);
   return (
     <div style={{
-      flex: 1, borderRadius: 12, padding: '14px 10px', textAlign: 'center',
+      flex: 1, borderRadius: 8, padding: '8px 4px', textAlign: 'center',
       background: isDark ? `${color}18` : `${color}10`,
       border: `1.5px solid ${color}45`,
-      boxShadow: isDark ? `0 0 20px ${color}12` : `0 2px 12px ${color}14`,
-      transition: 'all 0.2s',
+      minWidth: 0,
     }}>
-      {/* Big score number */}
-      <div style={{
-        fontSize: 36, fontWeight: 900, color, lineHeight: 1,
-        fontFamily: 'monospace', letterSpacing: '-0.03em',
-      }}>{score}</div>
-      {/* /100 */}
-      <div style={{ fontSize: 9, color: isDark ? '#666666' : '#888888', marginTop: 2, fontFamily: 'monospace' }}>/100</div>
-      {/* Month */}
-      <div style={{ fontSize: 10, color: isDark ? '#aaaaaa' : '#333333', marginTop: 6, fontWeight: 600, lineHeight: 1.3 }}>
-        {monthLabel}
-      </div>
-      {/* Predicted / Current badge */}
-      <div style={{ fontSize: 8, color: isDark ? '#666666' : '#888888', marginTop: 2 }}>
-        ({isCurrent ? 'Current' : 'Predicted'})
-      </div>
-      {/* Risk level chip */}
-      <div style={{ marginTop: 6 }}>
-        <span style={{
-          display: 'inline-block', padding: '2px 7px', borderRadius: 4,
-          fontSize: 8, fontWeight: 700,
-          background: `${color}25`, color, border: `1px solid ${color}50`,
-          letterSpacing: '0.05em',
-        }}>
+      <div style={{ fontSize: 18, fontWeight: 900, color, lineHeight: 1, fontFamily: 'monospace', letterSpacing: '-0.02em' }}>{formatCases(cases)}</div>
+      <div style={{ fontSize: 7, color: isDark ? '#666666' : '#888888', marginTop: 1, letterSpacing: '0.04em' }}>CASES</div>
+      <div style={{ fontSize: 9, color: isDark ? '#aaaaaa' : '#333333', marginTop: 4, fontWeight: 600, lineHeight: 1.2 }}>{monthLabel}</div>
+      <div style={{ fontSize: 7, color: isDark ? '#666666' : '#888888', marginTop: 1 }}>({isCurrent ? 'Current' : 'Predicted'})</div>
+      <div style={{ marginTop: 4 }}>
+        <span style={{ display: 'inline-block', padding: '1px 4px', borderRadius: 3, fontSize: 7, fontWeight: 700, background: `${color}25`, color, border: `1px solid ${color}50` }}>
           {riskLvl}
         </span>
       </div>
@@ -105,12 +98,12 @@ function Confidence({ level, isDark }: { level: 'HIGH' | 'MEDIUM' | 'LOW'; isDar
 }
 
 /* ── Progress bar ── */
-function ScoreBar({ label, value, color, isDark }: { label: string; value: number; color: string; isDark: boolean }) {
+function ScoreBar({ label, value, color, isDark, casesStr }: { label: string; value: number; color: string; isDark: boolean; casesStr?: string }) {
   return (
     <div style={{ marginBottom: 12 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
         <span style={{ color: isDark ? '#aaaaaa' : '#444444', fontSize: 11 }}>{label}</span>
-        <span style={{ color, fontSize: 11, fontWeight: 700, fontFamily: 'monospace' }}>{value} / 100</span>
+        <span style={{ color, fontSize: 11, fontWeight: 700, fontFamily: 'monospace' }}>{casesStr ?? `${value} / 100`}</span>
       </div>
       <div style={{ height: 6, borderRadius: 6, background: isDark ? 'rgba(255,255,255,0.08)' : '#eeeeee', overflow: 'hidden' }}>
         <div className="bar-fill" style={{ height: '100%', width: `${value}%`, borderRadius: 6, background: `linear-gradient(90deg, ${color}80, ${color})` }} />
@@ -131,7 +124,6 @@ export default function StatsPanel({ selectedRegion, riskData, riskType, predict
   const cfg = RISK_TYPE_CONFIG[riskType];
 
   const bg = isDark ? '#1a1a1a' : '#ffffff';
-  const cardBg = isDark ? '#222222' : '#f8fafc';
   const border = isDark ? '#2e2e2e' : '#e0e0e0';
   const tp = isDark ? '#ffffff' : '#111111';
   const ts = isDark ? '#aaaaaa' : '#444444';
@@ -187,7 +179,6 @@ export default function StatsPanel({ selectedRegion, riskData, riskType, predict
       : data.respiratory_risk
     : 0;
 
-  const aqiInfo = data ? getAQICategory(data.aqi) : null;
 
   return (
     <aside style={{ width: 296, height: '100%', background: bg, borderLeft: `1px solid ${border}`, display: 'flex', flexDirection: 'column', flexShrink: 0, transition: 'background 0.25s' }}>
@@ -260,26 +251,23 @@ export default function StatsPanel({ selectedRegion, riskData, riskType, predict
                 {(() => {
                   const [m0, m1, m2] = getMonthLabels();
                   const baseScore = primaryScore;
-                  // Simulate modest monthly change (~3-7 pts per month)
                   const s0 = baseScore;
                   const s1 = Math.min(99, Math.max(5, Math.round(baseScore + (Math.random() > 0.5 ? 5 : -3))));
                   const s2 = Math.min(99, Math.max(5, Math.round(s1 + (Math.random() > 0.5 ? 4 : -2))));
-
-                  // DIRE card colors: current=amber, next=blue, last=darker blue
-                  const CARD_COLORS = [
-                    { color: '#c8a951', bg: '#c8a951' },   // amber — current
-                    { color: '#3d8bcd', bg: '#3d8bcd' },   // steel blue — +1 mo
-                    { color: '#2d6fa8', bg: '#2d6fa8' },   // deeper blue — +2 mo
-                  ];
+                  const pop = data.population || 1_000_000;
+                  const c0 = scoreToCases(s0, pop, riskType);
+                  const c1 = scoreToCases(s1, pop, riskType);
+                  const c2 = scoreToCases(s2, pop, riskType);
+                  const CARD_COLORS = ['#c8a951', '#3d8bcd', '#2d6fa8'];
                   return (
                     <div style={{ marginBottom: 16 }}>
                       <div style={{ color: isDark ? '#666666' : '#888888', fontSize: 9, letterSpacing: '0.07em', fontWeight: 600, marginBottom: 10 }}>
                         {cfg.label.toUpperCase()} — PREDICTIONS
                       </div>
-                      <div style={{ display: 'flex', gap: 8 }}>
-                        <PredictionCard score={s0} monthLabel={m0} isCurrent={true}  color={CARD_COLORS[0].color} bg={CARD_COLORS[0].bg} isDark={isDark} />
-                        <PredictionCard score={s1} monthLabel={m1} isCurrent={false} color={CARD_COLORS[1].color} bg={CARD_COLORS[1].bg} isDark={isDark} />
-                        <PredictionCard score={s2} monthLabel={m2} isCurrent={false} color={CARD_COLORS[2].color} bg={CARD_COLORS[2].bg} isDark={isDark} />
+                      <div style={{ display: 'flex', gap: 5 }}>
+                        <PredictionCard score={s0} cases={c0} monthLabel={m0} isCurrent={true}  color={CARD_COLORS[0]} isDark={isDark} />
+                        <PredictionCard score={s1} cases={c1} monthLabel={m1} isCurrent={false} color={CARD_COLORS[1]} isDark={isDark} />
+                        <PredictionCard score={s2} cases={c2} monthLabel={m2} isCurrent={false} color={CARD_COLORS[2]} isDark={isDark} />
                       </div>
                     </div>
                   );
@@ -304,9 +292,11 @@ export default function StatsPanel({ selectedRegion, riskData, riskType, predict
                 {/* Score bars */}
                 <div style={{ marginTop: 16 }}>
                   <div style={{ color: tm, fontSize: 10, fontWeight: 600, letterSpacing: '0.07em', marginBottom: 10 }}>SCORE DISTRIBUTION</div>
-                  <ScoreBar label="Flood Risk" value={data.flood_risk} color="#3b82f6" isDark={isDark} />
-                  <ScoreBar label="Smog / Air Quality" value={data.smog_risk} color="#a855f7" isDark={isDark} />
-                  <ScoreBar label="Respiratory Infection" value={data.respiratory_risk} color="#14b8a6" isDark={isDark} />
+                  {(() => { const pop = data.population || 1_000_000; return (<>
+                    <ScoreBar label="Flood Risk"            value={data.flood_risk}       color="#3b82f6" isDark={isDark} casesStr={`${formatCases(scoreToCases(data.flood_risk,       pop, 'flood'))} cases`} />
+                    <ScoreBar label="Smog / Air Quality"   value={data.smog_risk}        color="#a855f7" isDark={isDark} casesStr={`${formatCases(scoreToCases(data.smog_risk,        pop, 'smog'))} cases`} />
+                    <ScoreBar label="Respiratory Infection" value={data.respiratory_risk} color="#14b8a6" isDark={isDark} casesStr={`${formatCases(scoreToCases(data.respiratory_risk, pop, 'respiratory'))} cases`} />
+                  </>); })()}
                 </div>
 
                 {/* Population */}
