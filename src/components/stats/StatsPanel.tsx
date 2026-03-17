@@ -190,7 +190,7 @@ export default function StatsPanel({ selectedRegion, riskData, riskType, predict
   const aqiInfo = data ? getAQICategory(data.aqi) : null;
 
   return (
-    <aside style={{ width: 296, background: bg, borderLeft: `1px solid ${border}`, display: 'flex', flexDirection: 'column', flexShrink: 0, transition: 'background 0.25s' }}>
+    <aside style={{ width: 296, height: '100%', background: bg, borderLeft: `1px solid ${border}`, display: 'flex', flexDirection: 'column', flexShrink: 0, transition: 'background 0.25s' }}>
 
       {/* ── Region header ── */}
       <div style={{ padding: '10px 14px', borderBottom: `1px solid ${border}`, background: isDark ? '#222222' : '#f5f5f5', flexShrink: 0 }}>

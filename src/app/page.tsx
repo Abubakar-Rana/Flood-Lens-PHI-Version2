@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import dynamic from 'next/dynamic';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { ThemeProvider, useTheme } from '@/lib/theme';
 import Navbar from '@/components/layout/Navbar';
 import Sidebar from '@/components/layout/Sidebar';
@@ -43,6 +44,7 @@ function Dashboard() {
   const [adminLevel, setAdminLevel] = useState<AdminLevel>('province');
   const [riskType, setRiskType] = useState<RiskType>('flood');
   const [predictionOffset, setPredictionOffset] = useState(0);
+  const [statsVisible, setStatsVisible] = useState(true);
 
   useEffect(() => {
     fetch('/risk_data.json').then(r => r.json()).then(setRiskData).catch(console.error);
@@ -87,16 +89,52 @@ function Dashboard() {
             onReset={() => setSelectedRegion(null)}
             isDark={isDark}
           />
+          {/* Toggle tab — on the map's right edge, always visible */}
+          <button
+            onClick={() => setStatsVisible(v => !v)}
+            title={statsVisible ? 'Hide Stats Panel' : 'Show Stats Panel'}
+            style={{
+              position: 'absolute',
+              right: 0,
+              top: '50%',
+              transform: 'translateY(-50%)',
+              zIndex: 1000,
+              width: 18,
+              height: 52,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              background: isDark ? '#1a1a1a' : '#ffffff',
+              border: `1px solid ${isDark ? '#2e2e2e' : '#e0e0e0'}`,
+              borderRight: 'none',
+              borderRadius: '6px 0 0 6px',
+              cursor: 'pointer',
+              color: isDark ? '#888888' : '#666666',
+              boxShadow: isDark ? '-2px 0 8px rgba(0,0,0,0.4)' : '-2px 0 8px rgba(0,0,0,0.08)',
+            }}
+          >
+            {statsVisible ? <ChevronRight size={11} /> : <ChevronLeft size={11} />}
+          </button>
         </main>
 
-        {/* Right panel */}
-        <StatsPanel
-          selectedRegion={selectedRegion}
-          riskData={riskData}
-          riskType={riskType}
-          predictionOffset={predictionOffset}
-          onReset={() => setSelectedRegion(null)}
-        />
+        {/* Right panel — slides in/out */}
+        <div style={{
+          width: statsVisible ? 296 : 0,
+          minWidth: 0,
+          overflow: 'hidden',
+          transition: 'width 0.25s ease',
+          flexShrink: 0,
+          height: '100%',
+          display: 'flex',
+        }}>
+          <StatsPanel
+            selectedRegion={selectedRegion}
+            riskData={riskData}
+            riskType={riskType}
+            predictionOffset={predictionOffset}
+            onReset={() => setSelectedRegion(null)}
+          />
+        </div>
       </div>
     </div>
   );
