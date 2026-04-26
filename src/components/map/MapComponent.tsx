@@ -1,255 +1,276 @@
 'use client';
 
-import { useEffect, useRef, useCallback } from 'react';
-import { AdminLevel, RiskData, RiskType, SelectedRegion } from '@/lib/types';
+import { useEffect, useRef, useState } from 'react';
+import type { Feature } from 'geojson';
+import { useApp } from '@/lib/state';
+import { loadBoundary, loadCountries, loadPoints, loadStats } from '@/lib/data';
+import { METRIC_BY_KEY, type AdminLevel, type CountryInfo, type StatsTable } from '@/lib/types';
+import { bucketIndex, formatMetric, getRamp, quantileBreaks } from '@/lib/utils';
 
 interface MapComponentProps {
-  riskType: RiskType;
-  adminLevel: AdminLevel;
-  selectedRegion: SelectedRegion | null;
-  onRegionSelect: (region: SelectedRegion | null) => void;
-  riskData: RiskData | null;
   isDark: boolean;
+  onStatsLoaded?: (stats: StatsTable, country: CountryInfo) => void;
 }
 
-/* Risk score → 0-4 tier index */
-function scoreTier(score: number): number {
-  if (score >= 80) return 4;
-  if (score >= 60) return 3;
-  if (score >= 40) return 2;
-  if (score >= 20) return 1;
-  return 0;
-}
+const LEVEL_TO_NUM: Record<AdminLevel, 0 | 1 | 2> = { admin0: 0, admin1: 1, admin2: 2 };
 
-/* Per-theme choropleth palettes  [lowest → highest] */
-const DARK_PALETTES: Record<RiskType, string[]> = {
-  flood:       ['#1e3a5f', '#1d4ed8', '#ca8a04', '#ea580c', '#b91c1c'],
-  smog:        ['#2d1b69', '#5b21b6', '#ca8a04', '#ea580c', '#7c2d12'],
-  respiratory: ['#134e4a', '#0d9488', '#ca8a04', '#ea580c', '#7f1d1d'],
-};
-
-const LIGHT_PALETTES: Record<RiskType, string[]> = {
-  flood:       ['#bfdbfe', '#60a5fa', '#fde047', '#fb923c', '#ef4444'],
-  smog:        ['#ede9fe', '#c084fc', '#fde047', '#fb923c', '#dc2626'],
-  respiratory: ['#ccfbf1', '#5eead4', '#fde047', '#fb923c', '#dc2626'],
-};
-
-function getRiskScore(data: RiskData['districts'][string] | null, type: RiskType): number {
-  if (!data) return 0;
-  if (type === 'flood') return data.flood_risk;
-  if (type === 'smog') return data.smog_risk;
-  return data.respiratory_risk;
-}
-
-function getProvinceScore(data: RiskData['provinces'][string] | null, type: RiskType): number {
-  if (!data) return 0;
-  if (type === 'flood') return data.flood_risk;
-  if (type === 'smog') return data.smog_risk;
-  return data.respiratory_risk;
-}
-
-export default function MapComponent({ riskType, adminLevel, selectedRegion, onRegionSelect, riskData, isDark }: MapComponentProps) {
-  const mapRef = useRef<any>(null);
+export default function MapComponent({ isDark, onStatsLoaded }: MapComponentProps) {
+  const app = useApp();
   const containerRef = useRef<HTMLDivElement>(null);
-  const districtLayerRef = useRef<any>(null);
-  const provinceLayerRef = useRef<any>(null);
-  const tileLayerRef = useRef<any>(null);
+  const mapRef = useRef<any>(null);
+  const tileRef = useRef<any>(null);
+  const boundaryRef = useRef<any>(null);
+  const pointLayersRef = useRef<Record<string, any>>({});
+  const [stats, setStats] = useState<StatsTable | null>(null);
+  const [country, setCountry] = useState<CountryInfo | null>(null);
+  // We attach the latest filter view so layer event handlers (created once)
+  // always read fresh state without rebinding.
+  const stateSnap = useRef(app);
+  stateSnap.current = app;
+  const statsSnap = useRef<StatsTable | null>(null);
+  statsSnap.current = stats;
 
-  const ATTRIBUTION = 'PHI Lab · University of Oxford · Pakistan Risk Predictor | © <a href="https://www.openstreetmap.org/">OSM</a> © <a href="https://carto.com/">CARTO</a>';
+  const ATTRIBUTION = '© <a href="https://www.openstreetmap.org/">OSM</a> © <a href="https://carto.com/">CARTO</a>';
 
-  /* ── Init map + initial tile layer in one effect ── */
+  // ── Init Leaflet map ───────────────────────────────────────────────
   useEffect(() => {
     if (mapRef.current || !containerRef.current) return;
     let cancelled = false;
-
     (async () => {
       const L = (await import('leaflet')).default;
       if (cancelled || mapRef.current) return;
 
       const map = L.map(containerRef.current!, {
-        center: [30.5, 69.5],
-        zoom: 5,
+        center: [25, 80],
+        zoom: 4,
         zoomControl: false,
-        attributionControl: true,
-        minZoom: 4,
+        minZoom: 3,
         maxZoom: 14,
+        worldCopyJump: false,
       });
-
       L.control.zoom({ position: 'topright' }).addTo(map);
       mapRef.current = map;
 
-      // Add tile layer immediately after map init (avoids race condition)
       const url = isDark
         ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
         : 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
-
-      tileLayerRef.current = L.tileLayer(url, {
-        attribution: ATTRIBUTION,
-        subdomains: 'abcd',
-        maxZoom: 14,
-      });
-      tileLayerRef.current.addTo(map);
+      tileRef.current = L.tileLayer(url, { attribution: ATTRIBUTION, subdomains: 'abcd', maxZoom: 14 });
+      tileRef.current.addTo(map);
     })();
-
     return () => { cancelled = true; };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  /* ── Swap tile layer on theme change (after initial load) ── */
+  // ── Swap basemap on theme change ───────────────────────────────────
   useEffect(() => {
-    if (!mapRef.current || !tileLayerRef.current) return;
-    let cancelled = false;
+    if (!mapRef.current || !tileRef.current) return;
+    (async () => {
+      const L = (await import('leaflet')).default;
+      mapRef.current.removeLayer(tileRef.current);
+      const url = isDark
+        ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
+        : 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
+      tileRef.current = L.tileLayer(url, { attribution: ATTRIBUTION, subdomains: 'abcd', maxZoom: 14 });
+      tileRef.current.addTo(mapRef.current);
+    })();
+  }, [isDark]);
+
+  // ── Load country meta + stats whenever country changes ─────────────
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      const idx = await loadCountries();
+      const c = idx.countries.find(x => x.code === app.countryCode);
+      if (!alive || !c) return;
+      const s = await loadStats(app.countryCode);
+      if (!alive) return;
+      setCountry(c);
+      setStats(s);
+      onStatsLoaded?.(s, c);
+      // Fly to country bbox
+      if (mapRef.current && c.bbox) {
+        const L = (await import('leaflet')).default;
+        const [w, s2, e, n] = c.bbox;
+        mapRef.current.fitBounds(L.latLngBounds([s2, w], [n, e]), { padding: [20, 20] });
+      }
+    })();
+    return () => { alive = false; };
+  }, [app.countryCode, onStatsLoaded]);
+
+  // ── Render boundary choropleth ────────────────────────────────────
+  useEffect(() => {
+    if (!mapRef.current || !stats || !country) return;
+    const lvl = LEVEL_TO_NUM[app.level];
+    if (!country.levels.includes(lvl)) return;
+    let alive = true;
 
     (async () => {
       const L = (await import('leaflet')).default;
-      if (cancelled || !mapRef.current) return;
+      const fc = await loadBoundary(country.code, lvl);
+      if (!alive || !mapRef.current) return;
 
-      mapRef.current.removeLayer(tileLayerRef.current);
+      // Compute breaks over visible-by-province subset (uses CURRENT state).
+      const m = METRIC_BY_KEY[app.metric];
+      const provinceFilter = app.provinceFilter;
+      const filterIds = (() => {
+        if (lvl !== 2 || provinceFilter.size === 0) return undefined;
+        const allowed = new Set<string>();
+        for (const [id, d] of Object.entries(stats)) {
+          if (provinceFilter.has(d.parent_id ?? '')) allowed.add(id);
+        }
+        return allowed;
+      })();
 
-      const url = isDark
-        ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
-        : 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
+      const allValues: number[] = [];
+      for (const [id, d] of Object.entries(stats)) {
+        if (filterIds && !filterIds.has(id)) continue;
+        const v = (d as Record<string, unknown>)[app.metric];
+        if (typeof v === 'number') allValues.push(v);
+      }
+      const breaks = quantileBreaks(allValues, 5);
+      const ramp = getRamp(m.semantics, isDark);
 
-      tileLayerRef.current = L.tileLayer(url, {
-        attribution: ATTRIBUTION,
-        subdomains: 'abcd',
-        maxZoom: 14,
-      });
-      tileLayerRef.current.addTo(mapRef.current);
-    })();
+      // Tear down old boundary layer
+      if (boundaryRef.current) {
+        mapRef.current.removeLayer(boundaryRef.current);
+        boundaryRef.current = null;
+      }
 
-    return () => { cancelled = true; };
-  }, [isDark]);
+      const styleFor = (feat: Feature) => {
+        const id = String(feat.id ?? feat.properties?.id ?? '');
+        const d = stats[id];
+        const v = d ? ((d as Record<string, unknown>)[app.metric] as number) : NaN;
+        const inFilter = !filterIds || filterIds.has(id);
+        const inRange = (
+          (app.metricMin === null || v >= app.metricMin) &&
+          (app.metricMax === null || v <= app.metricMax)
+        );
+        const passes = inFilter && inRange && d !== undefined;
+        const isSel = app.selectedDistrictId === id;
+        return {
+          fillColor: passes ? ramp[bucketIndex(v, breaks)] : (isDark ? '#1a1a1a' : '#e5e7eb'),
+          fillOpacity: passes ? (isSel ? 0.95 : 0.78) : 0.1,
+          color: isSel ? '#facc15' : (isDark ? 'rgba(255,255,255,0.18)' : 'rgba(0,0,0,0.2)'),
+          weight: isSel ? 2.8 : (lvl === 1 ? 1.2 : 0.5),
+        };
+      };
 
-  /* ── Refresh boundary layers ── */
-  const refreshLayers = useCallback(async () => {
-    if (!mapRef.current || !riskData) return;
-    const L = (await import('leaflet')).default;
-    const map = mapRef.current;
-    const palette = isDark ? DARK_PALETTES[riskType] : LIGHT_PALETTES[riskType];
-
-    /* Remove old layers */
-    if (districtLayerRef.current) { map.removeLayer(districtLayerRef.current); districtLayerRef.current = null; }
-    if (provinceLayerRef.current) { map.removeLayer(provinceLayerRef.current); provinceLayerRef.current = null; }
-
-    if (adminLevel === 'district') {
-      const resp = await fetch('/pakistan_districts.geojson');
-      const geojson = await resp.json();
-
-      districtLayerRef.current = L.geoJSON(geojson, {
-        style: (feature: any) => {
-          const name: string = feature.properties.DISTRICT;
-          const d = riskData.districts[name] ?? null;
-          const score = getRiskScore(d, riskType);
-          const tier = scoreTier(score);
-          const isSelected = selectedRegion?.level === 'district' && selectedRegion.name === name;
-          const isProvSel  = selectedRegion?.level === 'province' && d?.province === selectedRegion.name;
-
-          return {
-            fillColor: palette[tier],
-            fillOpacity: isSelected ? 0.9 : isProvSel ? 0.8 : 0.65,
-            color: isSelected ? '#f59e0b' : isProvSel ? '#fbbf24' : (isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.12)'),
-            weight: isSelected ? 2.5 : isProvSel ? 1.5 : 0.5,
-          };
-        },
-        onEachFeature: (feature: any, lyr: any) => {
-          const name: string = feature.properties.DISTRICT;
-          const province: string = feature.properties.PROVINCE;
-          const d = riskData.districts[name];
-          const score = d ? getRiskScore(d, riskType) : '–';
-
-          lyr.on({
+      const layer = L.geoJSON(fc, {
+        style: styleFor as any,
+        onEachFeature: (feat, lyr) => {
+          const id = String(feat.id ?? feat.properties?.id ?? '');
+          (lyr as any).on({
             mouseover(e: any) {
-              e.target.setStyle({ weight: 2.5, color: '#f59e0b', fillOpacity: 0.9 });
+              e.target.setStyle({ weight: 2.5, color: '#facc15' });
               e.target.bringToFront();
-
-              const riskLabel = typeof score === 'number'
-                ? score >= 80 ? 'Highest' : score >= 60 ? 'High' : score >= 40 ? 'Medium' : score >= 20 ? 'Low' : 'Lowest'
-                : '–';
-              const riskColor = typeof score === 'number'
-                ? score >= 80 ? '#b91c1c' : score >= 60 ? '#ea580c' : score >= 40 ? '#ca8a04' : score >= 20 ? '#0891b2' : '#1d4ed8'
-                : '#94a3b8';
-
-              lyr.bindTooltip(`
-                <div style="min-width:160px">
-                  <div style="font-weight:700;font-size:13px;margin-bottom:2px">${name}</div>
-                  <div style="color:#94a3b8;font-size:10px;margin-bottom:8px">${province}</div>
+              const s = statsSnap.current?.[id];
+              const md = METRIC_BY_KEY[stateSnap.current.metric];
+              const v = s ? ((s as Record<string, unknown>)[stateSnap.current.metric] as number) : undefined;
+              const subtitle = s?.parent_name ?? feat.properties?.parent_name ?? '';
+              const html = `
+                <div style="min-width:180px">
+                  <div style="font-weight:700;font-size:13px;margin-bottom:2px">${s?.name ?? feat.properties?.name ?? id}</div>
+                  ${subtitle ? `<div style="color:#94a3b8;font-size:10px;margin-bottom:8px">${subtitle}</div>` : ''}
                   <div style="display:flex;justify-content:space-between;align-items:center">
-                    <span style="color:#94a3b8;font-size:10px">Risk Score</span>
-                    <span style="font-weight:800;font-size:14px;font-family:monospace">${score}</span>
+                    <span style="color:#94a3b8;font-size:10px">${md.short}</span>
+                    <span style="font-weight:800;font-size:13px;font-family:monospace">${formatMetric(v, md)}${md.unit ? ` <span style="color:#64748b;font-size:9px">${md.unit}</span>` : ''}</span>
                   </div>
-                  <div style="display:flex;justify-content:space-between;align-items:center;margin-top:3px">
-                    <span style="color:#94a3b8;font-size:10px">Risk Level</span>
-                    <span style="font-weight:700;font-size:11px;color:${riskColor}">${riskLabel}</span>
+                  ${s ? `
+                  <div style="display:flex;justify-content:space-between;margin-top:3px">
+                    <span style="color:#94a3b8;font-size:10px">Affected pop.</span>
+                    <span style="font-size:10px">${formatMetric(s.affected_pop_total, METRIC_BY_KEY.affected_pop_total)}</span>
                   </div>
-                  ${d ? `<div style="display:flex;justify-content:space-between;align-items:center;margin-top:3px"><span style="color:#94a3b8;font-size:10px">Population</span><span style="font-size:10px">${(d.population / 1e6).toFixed(1)}M</span></div>` : ''}
-                  <div style="margin-top:8px;padding-top:6px;border-top:1px solid rgba(255,255,255,0.08);font-size:9px;color:#64748b">Click to view details →</div>
-                </div>
-              `, { direction: 'top', offset: [0, -4] }).openTooltip();
+                  <div style="display:flex;justify-content:space-between;margin-top:2px">
+                    <span style="color:#94a3b8;font-size:10px">Health / Schools</span>
+                    <span style="font-size:10px">${s.health_count} / ${s.school_count}</span>
+                  </div>` : ''}
+                  <div style="margin-top:6px;padding-top:5px;border-top:1px solid rgba(255,255,255,0.08);font-size:9px;color:#64748b">Click for details →</div>
+                </div>`;
+              (lyr as any).bindTooltip(html, { direction: 'top', offset: [0, -4], sticky: true }).openTooltip();
             },
             mouseout(e: any) {
-              districtLayerRef.current?.resetStyle(e.target);
+              boundaryRef.current?.resetStyle(e.target);
               e.target.closeTooltip();
             },
             click() {
-              onRegionSelect({ level: 'district', name, province });
+              if (lvl === 2) {
+                stateSnap.current.selectDistrict(id);
+              } else if (lvl === 1) {
+                // clicking a province at admin1 toggles the filter
+                stateSnap.current.toggleProvince(id);
+              }
             },
           });
         },
-      }).addTo(map);
+      });
+      layer.addTo(mapRef.current);
+      boundaryRef.current = layer;
+    })();
+    return () => { alive = false; };
+  }, [stats, country, app.level, app.metric, app.provinceFilter, app.metricMin, app.metricMax, app.selectedDistrictId, isDark]);
 
-    } else {
-      const resp = await fetch('/pakistan_provinces.geojson');
-      const geojson = await resp.json();
+  // ── Render point overlays (health / schools) ───────────────────────
+  useEffect(() => {
+    if (!mapRef.current || !country) return;
+    let alive = true;
 
-      provinceLayerRef.current = L.geoJSON(geojson, {
-        style: (feature: any) => {
-          const name: string = feature.properties.PROVINCE;
-          const p = riskData.provinces[name] ?? null;
-          const score = getProvinceScore(p, riskType);
-          const tier = scoreTier(score);
-          const isSelected = selectedRegion?.level === 'province' && selectedRegion.name === name;
+    (async () => {
+      const L = (await import('leaflet')).default;
+      const desired = new Set(app.pointLayers);
 
-          return {
-            fillColor: palette[tier],
-            fillOpacity: isSelected ? 0.9 : 0.65,
-            color: isSelected ? '#f59e0b' : (isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.15)'),
-            weight: isSelected ? 2.5 : 1,
-          };
-        },
-        onEachFeature: (feature: any, lyr: any) => {
-          const name: string = feature.properties.PROVINCE;
-          const p = riskData.provinces[name];
-          const score = p ? getProvinceScore(p, riskType) : '–';
+      // Remove layers no longer wanted
+      for (const kind of Object.keys(pointLayersRef.current)) {
+        if (!desired.has(kind as any)) {
+          mapRef.current.removeLayer(pointLayersRef.current[kind]);
+          delete pointLayersRef.current[kind];
+        }
+      }
 
-          lyr.on({
-            mouseover(e: any) {
-              e.target.setStyle({ weight: 2.5, color: '#f59e0b', fillOpacity: 0.9 });
-              e.target.bringToFront();
-              lyr.bindTooltip(`
-                <div style="min-width:155px">
-                  <div style="font-weight:700;font-size:13px;margin-bottom:6px">${name}</div>
-                  <div style="display:flex;justify-content:space-between">
-                    <span style="color:#94a3b8;font-size:10px">Risk Score</span>
-                    <span style="font-weight:800;font-size:14px;font-family:monospace">${score}</span>
-                  </div>
-                  ${p ? `<div style="display:flex;justify-content:space-between;margin-top:3px"><span style="color:#94a3b8;font-size:10px">Districts</span><span style="font-size:10px">${p.districts_count}</span></div>` : ''}
-                  <div style="margin-top:8px;padding-top:6px;border-top:1px solid rgba(255,255,255,0.08);font-size:9px;color:#64748b">Click to view details →</div>
-                </div>
-              `, { direction: 'top', offset: [0, -4] }).openTooltip();
-            },
-            mouseout(e: any) {
-              provinceLayerRef.current?.resetStyle(e.target);
-              e.target.closeTooltip();
-            },
-            click() { onRegionSelect({ level: 'province', name }); },
+      for (const kind of desired) {
+        if (pointLayersRef.current[kind]) continue;
+        const fc = await loadPoints(country.code, kind);
+        if (!alive) return;
+
+        const isHealth = kind === 'health';
+        const baseColor = isHealth ? '#ef4444' : '#3b82f6';
+
+        const group = L.layerGroup();
+        for (const f of fc.features) {
+          if (!f.geometry || f.geometry.type !== 'Point') continue;
+          const props = (f.properties ?? {}) as Record<string, unknown>;
+          // Apply amenity filter (health only)
+          if (isHealth && stateSnap.current.amenityFilter.size > 0) {
+            const a = String(props.amenity ?? 'unknown');
+            if (!stateSnap.current.amenityFilter.has(a)) continue;
+          }
+          const [lon, lat] = (f.geometry as any).coordinates;
+          const m = L.circleMarker([lat, lon], {
+            radius: 3.5,
+            color: baseColor,
+            weight: 1,
+            fillColor: baseColor,
+            fillOpacity: 0.6,
           });
-        },
-      }).addTo(map);
-    }
-  }, [riskType, adminLevel, selectedRegion, riskData, isDark, onRegionSelect]);
+          const name = (props.name as string) || (props.amenity as string) || kind;
+          const amenity = (props.amenity as string) || '';
+          m.bindTooltip(`<b>${name}</b>${amenity ? `<br><span style="color:#94a3b8;font-size:10px">${amenity}</span>` : ''}`,
+            { direction: 'top', offset: [0, -2] });
+          group.addLayer(m);
+        }
+        group.addTo(mapRef.current);
+        pointLayersRef.current[kind] = group;
+      }
+    })();
+    return () => { alive = false; };
+  }, [country, app.pointLayers, app.amenityFilter]);
 
-  useEffect(() => { refreshLayers(); }, [refreshLayers]);
+  // ── Fly to selected district ───────────────────────────────────────
+  useEffect(() => {
+    if (!mapRef.current || !stats || !app.selectedDistrictId) return;
+    const d = stats[app.selectedDistrictId];
+    if (!d || d.center_lat == null || d.center_lon == null) return;
+    mapRef.current.flyTo([d.center_lat, d.center_lon], Math.max(7, mapRef.current.getZoom()), { duration: 0.8 });
+  }, [app.selectedDistrictId, stats]);
 
-  return <div ref={containerRef} className="w-full h-full" />;
+  return <div ref={containerRef} style={{ width: '100%', height: '100%' }} />;
 }

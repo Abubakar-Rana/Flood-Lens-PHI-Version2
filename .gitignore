@@ -39,3 +39,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# ETL source data (7+ GB shapefiles + GeoTIFFs).
+# Only the ETL output in public/web-data/ is committed.
+/source-data/

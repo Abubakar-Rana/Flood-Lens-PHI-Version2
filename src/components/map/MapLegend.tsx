@@ -1,67 +1,67 @@
 'use client';
 
-import { RiskType, RISK_TYPE_CONFIG } from '@/lib/types';
+import { useEffect, useState } from 'react';
+import { useApp } from '@/lib/state';
+import { loadStats } from '@/lib/data';
+import { METRIC_BY_KEY, type StatsTable } from '@/lib/types';
+import { formatMetric, getRamp, quantileBreaks, metricValues } from '@/lib/utils';
 
-interface MapLegendProps {
-  riskType: RiskType;
-  isDark: boolean;
-}
+export default function MapLegend({ isDark }: { isDark: boolean }) {
+  const app = useApp();
+  const [stats, setStats] = useState<StatsTable | null>(null);
 
-const DARK_PALETTES: Record<RiskType, string[]> = {
-  flood:       ['#1a3d55', '#1b6690', '#a86c10', '#bd3e10', '#8c1a1a'],
-  smog:        ['#2d1b69', '#5b21b6', '#a86c10', '#bd3e10', '#7c1a1a'],
-  respiratory: ['#134e4a', '#0d9488', '#a86c10', '#bd3e10', '#7f1d1d'],
-};
+  useEffect(() => { loadStats(app.countryCode).then(setStats); }, [app.countryCode]);
 
-const LIGHT_PALETTES: Record<RiskType, string[]> = {
-  flood:       ['#b8d4e8', '#5a9fc4', '#d4940e', '#c95414', '#a01818'],
-  smog:        ['#e4d4f7', '#9d6cd4', '#d4940e', '#c95414', '#8c1414'],
-  respiratory: ['#b8eae4', '#3ab8a8', '#d4940e', '#c95414', '#9c1a1a'],
-};
+  const m = METRIC_BY_KEY[app.metric];
+  const ramp = getRamp(m.semantics, isDark);
 
-const TIERS = ['Lowest', 'Low', 'Medium', 'High', 'Highest'];
+  let breaks: number[] = [];
+  if (stats) {
+    const filterIds = (() => {
+      if (app.provinceFilter.size === 0) return undefined;
+      const allowed = new Set<string>();
+      for (const [id, d] of Object.entries(stats)) {
+        if (app.provinceFilter.has(d.parent_id ?? '')) allowed.add(id);
+      }
+      return allowed;
+    })();
+    breaks = quantileBreaks(metricValues(stats, app.metric, filterIds), 5);
+  }
 
-export default function MapLegend({ riskType, isDark }: MapLegendProps) {
-  const cfg     = RISK_TYPE_CONFIG[riskType];
-  const palette = isDark ? DARK_PALETTES[riskType] : LIGHT_PALETTES[riskType];
-
-  const bg     = isDark ? 'rgba(17,17,17,0.94)' : 'rgba(255,255,255,0.97)';
-  const border = isDark ? '#2e2e2e'            : '#d6e0eb';
-  const ts     = isDark ? '#ffffff'            : '#111111';
-  const tm     = isDark ? '#666666'            : '#888888';
+  const bg = isDark ? 'rgba(17,17,17,0.92)' : 'rgba(255,255,255,0.94)';
+  const border = isDark ? '#2e2e2e' : '#d6e0eb';
+  const tp = isDark ? '#fff' : '#111';
+  const tm = isDark ? '#888' : '#666';
 
   return (
-    <div style={{
-      background: bg,
-      border: `1px solid ${border}`,
-      borderRadius: 12,
-      padding: '12px 16px',
-      backdropFilter: 'blur(14px)',
-      boxShadow: isDark
-        ? '0 8px 32px rgba(0,0,0,0.55)'
-        : '0 4px 20px rgba(0,0,0,0.1)',
-      minWidth: 160,
-    }}>
-      {/* Title row */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 10 }}>
-        <div style={{ width: 8, height: 8, borderRadius: '50%', background: cfg.color, flexShrink: 0 }} />
-        <span style={{ color: cfg.color, fontSize: 11, fontWeight: 800, letterSpacing: '0.07em' }}>
-          {cfg.label.toUpperCase()}
-        </span>
-      </div>
-
-      {/* Simple swatch rows — exactly like DIRE */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
-        {TIERS.map((tier, i) => (
-          <div key={tier} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <div style={{
-              width: 22, height: 22, borderRadius: 5, flexShrink: 0,
-              background: palette[i],
-            }} />
-            <span style={{ color: ts, fontSize: 12, fontWeight: 500 }}>{tier}</span>
+    <div style={{ background: bg, border: `1px solid ${border}`, borderRadius: 10, padding: 10, minWidth: 200, backdropFilter: 'blur(10px)' }}>
+      <div style={{ color: tp, fontSize: 11, fontWeight: 700, marginBottom: 4 }}>{m.short}</div>
+      <div style={{ color: tm, fontSize: 9, marginBottom: 8 }}>{m.label}{m.unit ? ` (${m.unit})` : ''}</div>
+      {breaks.length === 5 ? (
+        <div>
+          {ramp.map((c, i) => {
+            const lo = i === 0 ? 0 : (breaks[i - 1] ?? 0);
+            const hi = breaks[i] ?? 0;
+            const text = i === 0
+              ? `≤ ${formatMetric(hi, m)}`
+              : i === 4
+                ? `> ${formatMetric(breaks[i - 1] ?? hi, m)}`
+                : `${formatMetric(lo, m)} – ${formatMetric(hi, m)}`;
+            return (
+              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
+                <span style={{ width: 18, height: 10, background: c, borderRadius: 2, flexShrink: 0, border: `1px solid ${isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'}` }} />
+                <span style={{ color: tp, fontSize: 10, fontFamily: 'monospace' }}>{text}</span>
+              </div>
+            );
+          })}
+          <div style={{ marginTop: 6, paddingTop: 6, borderTop: `1px solid ${border}`, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ width: 18, height: 10, background: isDark ? '#1a1a1a' : '#e5e7eb', borderRadius: 2, flexShrink: 0, border: `1px solid ${isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'}` }} />
+            <span style={{ color: tm, fontSize: 9 }}>Filtered out / no data</span>
           </div>
-        ))}
-      </div>
+        </div>
+      ) : (
+        <div style={{ color: tm, fontSize: 10 }}>Loading…</div>
+      )}
     </div>
   );
 }

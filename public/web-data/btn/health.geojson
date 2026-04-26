@@ -1,0 +1,16 @@
+{
+"type": "FeatureCollection",
+"name": "health",
+"crs": { "type": "name", "properties": { "name": "urn:ogc:def:crs:OGC:1.3:CRS84" } },
+"features": [
+{ "type": "Feature", "properties": { "name": "Druk Menlha Pharmacy", "amenity": "pharmacy", "healthcare": null, "addr_city": null, "osm_id": 11932830269, "osm_type": "nodes" }, "geometry": { "type": "Point", "coordinates": [ 89.6596873, 27.4411749 ] } },
+{ "type": "Feature", "properties": { "name": null, "amenity": "pharmacy", "healthcare": null, "addr_city": null, "osm_id": 9507756417, "osm_type": "nodes" }, "geometry": { "type": "Point", "coordinates": [ 89.6593785, 27.4394021 ] } },
+{ "type": "Feature", "properties": { "name": null, "amenity": "pharmacy", "healthcare": null, "addr_city": null, "osm_id": 9452512330, "osm_type": "nodes" }, "geometry": { "type": "Point", "coordinates": [ 89.6476497, 27.4316461 ] } },
+{ "type": "Feature", "properties": { "name": "Jomotsangkha BHU I", "amenity": "hospital", "healthcare": "hospital", "addr_city": null, "osm_id": 6063760985, "osm_type": "nodes" }, "geometry": { "type": "Point", "coordinates": [ 92.110132, 26.8978849 ] } },
+{ "type": "Feature", "properties": { "name": null, "amenity": "pharmacy", "healthcare": null, "addr_city": null, "osm_id": 9441660918, "osm_type": "nodes" }, "geometry": { "type": "Point", "coordinates": [ 89.6553359, 27.4368468 ] } },
+{ "type": "Feature", "properties": { "name": "BHU", "amenity": "hospital", "healthcare": null, "addr_city": null, "osm_id": 11937240369, "osm_type": "nodes" }, "geometry": { "type": "Point", "coordinates": [ 89.4502909, 27.3845845 ] } },
+{ "type": "Feature", "properties": { "name": "Imtrat Hospital", "amenity": "hospital", "healthcare": null, "addr_city": null, "osm_id": 11937240273, "osm_type": "nodes" }, "geometry": { "type": "Point", "coordinates": [ 89.4447094, 27.3861974 ] } },
+{ "type": "Feature", "properties": { "name": "Druk Menlha Pharmacy", "amenity": "pharmacy", "healthcare": null, "addr_city": null, "osm_id": 11936569369, "osm_type": "nodes" }, "geometry": { "type": "Point", "coordinates": [ 89.6593246, 27.4411698 ] } },
+{ "type": "Feature", "properties": { "name": "Chhigso Thobphel Pharmacy", "amenity": "pharmacy", "healthcare": null, "addr_city": null, "osm_id": 11936511169, "osm_type": "nodes" }, "geometry": { "type": "Point", "coordinates": [ 89.6514794, 27.4528832 ] } }
+]
+}

@@ -1,0 +1,17 @@
+{
+  "affected_pop_total": 3959593.0,
+  "affected_child_pop_total": 329100.0,
+  "health_count": 648,
+  "school_count": 2353,
+  "area_sqkm": 147652.72382934,
+  "district_count": 77,
+  "health_amenity_breakdown": {
+    "hospital": 114,
+    "unknown": 36,
+    "dentist": 19,
+    "pharmacy": 109,
+    "clinic": 366,
+    "doctors": 3,
+    "health_post": 1
+  }
+}

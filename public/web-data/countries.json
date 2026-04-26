@@ -1,0 +1,227 @@
+{
+  "countries": [
+    {
+      "code": "pak",
+      "name": "Pakistan",
+      "iso3": "PAK",
+      "levels": [
+        0,
+        1,
+        2
+      ],
+      "bbox": [
+        60.878597404000175,
+        23.69468307500017,
+        77.83396708800012,
+        37.08942389800018
+      ],
+      "center": [
+        30.392053486500174,
+        69.35628224600015
+      ],
+      "totals": {
+        "affected_pop_total": 33932780.0,
+        "affected_child_pop_total": 3302367.0,
+        "health_count": 469,
+        "school_count": 334,
+        "area_sqkm": 876141.21767898,
+        "district_count": 160,
+        "health_amenity_breakdown": {
+          "doctors": 23,
+          "hospital": 260,
+          "unknown": 38,
+          "clinic": 77,
+          "pharmacy": 65,
+          "dentist": 6
+        }
+      }
+    },
+    {
+      "code": "ind",
+      "name": "India",
+      "iso3": "IND",
+      "levels": [
+        0,
+        2
+      ],
+      "bbox": [
+        68.17939,
+        6.75649,
+        97.39744,
+        37.07742
+      ],
+      "center": [
+        21.916954999999998,
+        82.788415
+      ],
+      "totals": {
+        "affected_pop_total": 127223754.0,
+        "affected_child_pop_total": 8394523.0,
+        "health_count": 27161,
+        "school_count": 4304,
+        "area_sqkm": 3273555.7197984993,
+        "district_count": 735,
+        "health_amenity_breakdown": {
+          "unknown": 9235,
+          "hospital": 9881,
+          "clinic": 4289,
+          "doctors": 593,
+          "pharmacy": 1235,
+          "dentist": 1079,
+          "health_post": 834,
+          "doctors;pharmacy": 1,
+          "nursing_home": 3,
+          "social_facility": 1,
+          "blood_bank": 1,
+          "hospital;clinic": 1,
+          "clinic;hospital": 2,
+          "childcare": 4,
+          "research_institute": 1,
+          "Dispensary": 1
+        }
+      }
+    },
+    {
+      "code": "bgd",
+      "name": "Bangladesh",
+      "iso3": "BGD",
+      "levels": [
+        0,
+        1,
+        2
+      ],
+      "bbox": [
+        88.00816912400006,
+        20.590608254000188,
+        92.68005782300008,
+        26.634548266000024
+      ],
+      "center": [
+        23.612578260000106,
+        90.34411347350007
+      ],
+      "totals": {
+        "affected_pop_total": 14273436.0,
+        "affected_child_pop_total": 1308378.0,
+        "health_count": 443,
+        "school_count": 583,
+        "area_sqkm": 145962.10438815,
+        "district_count": 64,
+        "health_amenity_breakdown": {
+          "pharmacy": 220,
+          "hospital": 126,
+          "unknown": 27,
+          "dentist": 7,
+          "clinic": 57,
+          "doctors": 6
+        }
+      }
+    },
+    {
+      "code": "npl",
+      "name": "Nepal",
+      "iso3": "NPL",
+      "levels": [
+        0,
+        1,
+        2
+      ],
+      "bbox": [
+        80.05846710800012,
+        26.347762022000154,
+        88.20154995700005,
+        30.44719846700019
+      ],
+      "center": [
+        28.397480244500173,
+        84.13000853250009
+      ],
+      "totals": {
+        "affected_pop_total": 3959593.0,
+        "affected_child_pop_total": 329100.0,
+        "health_count": 648,
+        "school_count": 2353,
+        "area_sqkm": 147652.72382934,
+        "district_count": 77,
+        "health_amenity_breakdown": {
+          "hospital": 114,
+          "unknown": 36,
+          "dentist": 19,
+          "pharmacy": 109,
+          "clinic": 366,
+          "doctors": 3,
+          "health_post": 1
+        }
+      }
+    },
+    {
+      "code": "btn",
+      "name": "Bhutan",
+      "iso3": "BTN",
+      "levels": [
+        0,
+        1,
+        2
+      ],
+      "bbox": [
+        88.7460414140001,
+        26.700655537000102,
+        92.12475435900006,
+        28.247679301000176
+      ],
+      "center": [
+        27.47416741900014,
+        90.43539788650008
+      ],
+      "totals": {
+        "affected_pop_total": 56950.0,
+        "affected_child_pop_total": 284.0,
+        "health_count": 9,
+        "school_count": 8,
+        "area_sqkm": 38763.01956326,
+        "district_count": 205,
+        "health_amenity_breakdown": {
+          "pharmacy": 6,
+          "hospital": 3
+        }
+      }
+    },
+    {
+      "code": "lka",
+      "name": "SriLanka",
+      "iso3": "LKA",
+      "levels": [
+        0,
+        1,
+        2
+      ],
+      "bbox": [
+        79.52131521200005,
+        5.918696761000149,
+        81.8790335760001,
+        9.83586297700009
+      ],
+      "center": [
+        7.87727986900012,
+        80.70017439400007
+      ],
+      "totals": {
+        "affected_pop_total": 330727.0,
+        "affected_child_pop_total": 20930.0,
+        "health_count": 1137,
+        "school_count": 2759,
+        "area_sqkm": 66040.81071155,
+        "district_count": 25,
+        "health_amenity_breakdown": {
+          "hospital": 452,
+          "clinic": 105,
+          "pharmacy": 377,
+          "doctors": 109,
+          "unknown": 62,
+          "dentist": 31,
+          "atm": 1
+        }
+      }
+    }
+  ]
+}

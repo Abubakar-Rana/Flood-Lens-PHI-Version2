@@ -1,0 +1,15 @@
+{
+"type": "FeatureCollection",
+"name": "schools",
+"crs": { "type": "name", "properties": { "name": "urn:ogc:def:crs:OGC:1.3:CRS84" } },
+"features": [
+{ "type": "Feature", "properties": { "name": "Bhutan Football Academy", "amenity": "school", "addr_city": null, "osm_id": 12003204673, "osm_type": "nodes" }, "geometry": { "type": "Point", "coordinates": [ 89.6510595, 27.4560789 ] } },
+{ "type": "Feature", "properties": { "name": "Bhutan International School of Hospitality and Tourism", "amenity": "school", "addr_city": null, "osm_id": 9445354219, "osm_type": "nodes" }, "geometry": { "type": "Point", "coordinates": [ 89.6547251, 27.43694 ] } },
+{ "type": "Feature", "properties": { "name": "Utpal Academy", "amenity": "school", "addr_city": null, "osm_id": 11937235470, "osm_type": "nodes" }, "geometry": { "type": "Point", "coordinates": [ 89.3570918, 27.459398 ] } },
+{ "type": "Feature", "properties": { "name": "Debsi High School", "amenity": "school", "addr_city": null, "osm_id": 11935343670, "osm_type": "nodes" }, "geometry": { "type": "Point", "coordinates": [ 89.644248, 27.4326756 ] } },
+{ "type": "Feature", "properties": { "name": "Gomdar Central School", "amenity": "school", "addr_city": null, "osm_id": 7513361678, "osm_type": "nodes" }, "geometry": { "type": "Point", "coordinates": [ 91.5512439, 26.9952119 ] } },
+{ "type": "Feature", "properties": { "name": "Jomotsangkha Middle Secondary School", "amenity": "school", "addr_city": null, "osm_id": 7473798622, "osm_type": "nodes" }, "geometry": { "type": "Point", "coordinates": [ 92.1100938, 26.8959324 ] } },
+{ "type": "Feature", "properties": { "name": "Jomotsangkha Middle Secondary School", "amenity": "school", "addr_city": null, "osm_id": 7473798622, "osm_type": "nodes" }, "geometry": { "type": "Point", "coordinates": [ 92.1100938, 26.8959324 ] } },
+{ "type": "Feature", "properties": { "name": "Chuzagang primary School", "amenity": "school", "addr_city": null, "osm_id": 11955429488, "osm_type": "nodes" }, "geometry": { "type": "Point", "coordinates": [ 90.5233955, 26.8638166 ] } }
+]
+}
