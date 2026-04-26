@@ -30,24 +30,27 @@ export default function Navbar() {
   return (
     <nav style={{ height: 56, background: bg, borderBottom: `1px solid ${border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 16px', flexShrink: 0, zIndex: 100 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-        <div style={{ width: 34, height: 34, borderRadius: 8, flexShrink: 0,
-          background: 'linear-gradient(145deg, #002147 0%, #003d80 100%)',
-          border: '1px solid #1a4a7a',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          boxShadow: '0 0 16px rgba(0,33,71,0.5)' }}>
-          <svg viewBox="0 0 22 24" width="14" height="15" fill="none">
-            <path d="M11 1L2 5v7c0 5.25 3.8 9.85 9 11 5.2-1.15 9-5.75 9-11V5L11 1z" fill="#c8a951" fillOpacity="0.9" />
-            <path d="M8 12l2.5 2.5 4-5" stroke="#002147" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-        </div>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/floodlens-logo.png"
+          alt="FloodLens"
+          style={{
+            width: 40, height: 40, flexShrink: 0,
+            objectFit: 'contain',
+            borderRadius: 8,
+            // Subtle backdrop only in dark mode so the mark stays readable
+            background: isDark ? 'rgba(255,255,255,0.04)' : 'transparent',
+            padding: 2,
+          }}
+        />
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ color: tp, fontWeight: 800, fontSize: 14, letterSpacing: '0.02em' }}>PHI Lab</span>
+            <span style={{ color: tp, fontWeight: 800, fontSize: 15, letterSpacing: '0.01em' }}>FloodLens</span>
             <span style={{ color: tm, fontSize: 13, fontWeight: 300 }}>·</span>
-            <span style={{ color: ts, fontWeight: 400, fontSize: 12 }}>South Asia Affected-Population Atlas</span>
+            <span style={{ color: ts, fontWeight: 400, fontSize: 12 }}>South Asia Flood Atlas</span>
           </div>
           <div style={{ color: tm, fontSize: 9, letterSpacing: '0.07em', marginTop: 1 }}>
-            UNIVERSITY OF OXFORD · PLANETARY HEALTH INFORMATICS LAB
+            PHI LAB · UNIVERSITY OF OXFORD · PLANETARY HEALTH INFORMATICS LAB
           </div>
         </div>
       </div>
