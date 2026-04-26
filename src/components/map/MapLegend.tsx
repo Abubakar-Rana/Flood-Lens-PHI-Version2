@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useApp } from '@/lib/state';
 import { loadStats } from '@/lib/data';
 import { METRIC_BY_KEY, type StatsTable } from '@/lib/types';
-import { formatMetric, getRamp, quantileBreaks, metricValues } from '@/lib/utils';
+import { formatMetric, getRamp, quantileBreaks, metricValues, statsForLevel } from '@/lib/utils';
 
 export default function MapLegend({ isDark }: { isDark: boolean }) {
   const app = useApp();
@@ -17,15 +17,21 @@ export default function MapLegend({ isDark }: { isDark: boolean }) {
 
   let breaks: number[] = [];
   if (stats) {
+    const activeStats = statsForLevel(stats, app.level);
     const filterIds = (() => {
-      if (app.provinceFilter.size === 0) return undefined;
+      if (app.provinceFilter.size === 0 && !app.hideZeroAffected) return undefined;
       const allowed = new Set<string>();
-      for (const [id, d] of Object.entries(stats)) {
-        if (app.provinceFilter.has(d.parent_id ?? '')) allowed.add(id);
+      for (const [id, d] of Object.entries(activeStats)) {
+        if (app.provinceFilter.size > 0) {
+          if (app.level === 'admin1' && !app.provinceFilter.has(id)) continue;
+          if (app.level === 'admin2' && !app.provinceFilter.has(d.parent_id ?? '')) continue;
+        }
+        if (app.hideZeroAffected && (d.affected_pop_total ?? 0) <= 0) continue;
+        allowed.add(id);
       }
       return allowed;
     })();
-    breaks = quantileBreaks(metricValues(stats, app.metric, filterIds), 5);
+    breaks = quantileBreaks(metricValues(activeStats, app.metric, filterIds), 5);
   }
 
   const bg = isDark ? 'rgba(17,17,17,0.92)' : 'rgba(255,255,255,0.94)';

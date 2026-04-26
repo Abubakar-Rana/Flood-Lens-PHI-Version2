@@ -81,6 +81,8 @@ export type MetricKey =
   | 'school_per_1k_sqkm'
   | 'health_per_100k_affected'
   | 'school_per_100k_affected_children'
+  | 'affected_per_health_facility'
+  | 'affected_children_per_school'
   | 'area_sqkm';
 
 export interface MetricDef {
@@ -122,25 +124,33 @@ export const METRICS: MetricDef[] = [
     unit: '%', semantics: 'hot', format: 'percent', group: 'children',
     description: 'affected_children / affected_pop × 100.' },
 
-  { key: 'health_count', label: 'Health Facilities (count)', short: 'Health #',
+  { key: 'health_count', label: 'Flood-Affected Health Facilities (count)', short: 'Flood-Aff. Health #',
     semantics: 'cool', format: 'integer', group: 'health',
-    description: 'OSM health facilities inside district (hospitals, clinics, pharmacies, etc.).' },
-  { key: 'health_per_1k_sqkm', label: 'Health Facilities per 1000 km²', short: 'Health /1k km²',
+    description: 'Health facilities (hospitals, clinics, pharmacies, etc.) located inside flood-affected zones in this district.' },
+  { key: 'health_per_1k_sqkm', label: 'Flood-Affected Health Facilities per 1000 km²', short: 'Flood-Aff. Health /1k km²',
     unit: '/1000km²', semantics: 'cool', format: 'float', group: 'health',
-    description: 'Health facility geographic density.' },
-  { key: 'health_per_100k_affected', label: 'Health Facilities per 100k Affected', short: 'Health /100k aff.',
+    description: 'Geographic density of flood-affected health facilities.' },
+  { key: 'health_per_100k_affected', label: 'Flood-Affected Health Facilities per 100k Affected', short: 'Flood-Aff. Health /100k aff.',
     unit: '/100k', semantics: 'cool', format: 'float', group: 'health',
-    description: 'Per-capita service availability for the affected population.' },
+    description: 'Per-capita availability of flood-affected health facilities for the flood-affected population.' },
 
-  { key: 'school_count', label: 'Schools (count)', short: 'Schools #',
+  { key: 'school_count', label: 'Flood-Affected Schools (count)', short: 'Flood-Aff. Schools #',
     semantics: 'cool', format: 'integer', group: 'schools',
-    description: 'OSM schools inside district.' },
-  { key: 'school_per_1k_sqkm', label: 'Schools per 1000 km²', short: 'Schools /1k km²',
+    description: 'Schools located inside flood-affected zones in this district.' },
+  { key: 'school_per_1k_sqkm', label: 'Flood-Affected Schools per 1000 km²', short: 'Flood-Aff. Schools /1k km²',
     unit: '/1000km²', semantics: 'cool', format: 'float', group: 'schools',
-    description: 'School geographic density.' },
-  { key: 'school_per_100k_affected_children', label: 'Schools per 100k Affected Children', short: 'Schools /100k child',
+    description: 'Geographic density of flood-affected schools.' },
+  { key: 'school_per_100k_affected_children', label: 'Flood-Affected Schools per 100k Affected Children', short: 'Flood-Aff. Schools /100k child',
     unit: '/100k', semantics: 'cool', format: 'float', group: 'schools',
-    description: 'Per-capita school availability for affected children.' },
+    description: 'Per-capita availability of flood-affected schools for the flood-affected children.' },
+
+  // Service-strain metrics — higher means each facility/school is serving more people.
+  { key: 'affected_per_health_facility', label: 'Flood-Affected People per Health Facility', short: 'People / Health',
+    semantics: 'hot', format: 'integer', group: 'health',
+    description: 'How many flood-affected people share each flood-affected health facility — service-strain indicator.' },
+  { key: 'affected_children_per_school', label: 'Flood-Affected Children per School', short: 'Children / School',
+    semantics: 'hot', format: 'integer', group: 'schools',
+    description: 'How many flood-affected children share each flood-affected school — service-strain indicator.' },
 
   { key: 'area_sqkm', label: 'Area', short: 'Area', unit: 'km²',
     semantics: 'neutral', format: 'float', group: 'geography',
@@ -158,10 +168,12 @@ export interface FilterState {
   countryCode: string;
   level: AdminLevel;            // current choropleth level
   metric: MetricKey;
-  selectedDistrictId: string | null;
+  // Currently selected region — district id at admin2, province id at admin1,
+  // null at admin0 / no selection.
+  selectedRegionId: string | null;
   // Multi-selects (empty Set = no filter applied)
-  provinceFilter: Set<string>;
-  amenityFilter: Set<string>;   // subset of health amenity types
+  provinceFilter: Set<string>;  // province ids; restricts what's shown on the map
+  amenityFilter: Set<string>;   // subset of flood-aff. health amenity types
   // Numeric filter on the active metric. null = no bound.
   metricMin: number | null;
   metricMax: number | null;
@@ -169,4 +181,34 @@ export interface FilterState {
   pointLayers: Set<PointLayer>;
   // Search query against district/province name
   search: string;
+  // Active preset (one-click filter combo) — null when none.
+  preset: PresetKey | null;
+  // Hide regions where flood-affected pop is 0 (outside flood mask).
+  hideZeroAffected: boolean;
 }
+
+export type PresetKey = 'hotspots' | 'service_gap' | 'underserved_schools' | 'worst_combined';
+
+export interface PresetDef {
+  key: PresetKey;
+  label: string;
+  description: string;
+  metric: MetricKey;
+  // 'top' = filter to top quintile of metric, 'bottom' = bottom quintile.
+  direction: 'top' | 'bottom';
+}
+
+export const PRESETS: PresetDef[] = [
+  { key: 'hotspots', label: 'Hotspots',
+    description: 'Top 20% by total flood-affected population.',
+    metric: 'affected_pop_total', direction: 'top' },
+  { key: 'service_gap', label: 'Service Gap',
+    description: 'Top 20% by flood-affected people per health facility — most strained.',
+    metric: 'affected_per_health_facility', direction: 'top' },
+  { key: 'underserved_schools', label: 'Underserved Schools',
+    description: 'Top 20% by flood-affected children per school — most strained.',
+    metric: 'affected_children_per_school', direction: 'top' },
+  { key: 'worst_combined', label: 'Worst Combined',
+    description: 'Districts with the highest affected children — focus areas for relief.',
+    metric: 'affected_child_pop_total', direction: 'top' },
+];

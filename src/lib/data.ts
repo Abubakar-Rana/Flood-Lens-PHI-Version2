@@ -4,6 +4,7 @@ import type { FeatureCollection } from 'geojson';
 import { feature as topoFeature } from 'topojson-client';
 import type { Topology, GeometryCollection } from 'topojson-specification';
 import type { CountriesIndex, CountryInfo, StatsTable } from './types';
+import { augmentStats } from './utils';
 
 const cache = new Map<string, unknown>();
 
@@ -21,7 +22,15 @@ export async function loadCountries(): Promise<CountriesIndex> {
 }
 
 export async function loadStats(countryCode: string): Promise<StatsTable> {
-  return fetchJson<StatsTable>(`/web-data/${countryCode}/stats.json`);
+  const cacheKey = `stats:${countryCode}`;
+  if (cache.has(cacheKey)) return cache.get(cacheKey) as StatsTable;
+  const raw = await fetchJson<StatsTable>(`/web-data/${countryCode}/stats.json`);
+  // Augment in-place with the two derived service-strain metrics. The
+  // file-level cache (above) returns the same reference for repeat calls,
+  // so we tag the augmented table separately to avoid double-augmenting.
+  const augmented = augmentStats(raw);
+  cache.set(cacheKey, augmented);
+  return augmented;
 }
 
 export async function loadBoundary(countryCode: string, level: 0 | 1 | 2): Promise<FeatureCollection> {

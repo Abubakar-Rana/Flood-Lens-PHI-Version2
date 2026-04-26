@@ -5,7 +5,7 @@ import type { Feature } from 'geojson';
 import { useApp } from '@/lib/state';
 import { loadBoundary, loadCountries, loadPoints, loadStats } from '@/lib/data';
 import { METRIC_BY_KEY, type AdminLevel, type CountryInfo, type StatsTable } from '@/lib/types';
-import { bucketIndex, formatMetric, getRamp, quantileBreaks } from '@/lib/utils';
+import { bucketIndex, formatMetric, getRamp, quantileBreaks, statsForLevel } from '@/lib/utils';
 
 interface MapComponentProps {
   isDark: boolean;
@@ -21,10 +21,9 @@ export default function MapComponent({ isDark, onStatsLoaded }: MapComponentProp
   const tileRef = useRef<any>(null);
   const boundaryRef = useRef<any>(null);
   const pointLayersRef = useRef<Record<string, any>>({});
-  const [stats, setStats] = useState<StatsTable | null>(null);
+  const [stats, setStats] = useState<StatsTable | null>(null);  // district-keyed
   const [country, setCountry] = useState<CountryInfo | null>(null);
-  // We attach the latest filter view so layer event handlers (created once)
-  // always read fresh state without rebinding.
+  // Latest filter view for layer event handlers (created once, read fresh).
   const stateSnap = useRef(app);
   stateSnap.current = app;
   const statsSnap = useRef<StatsTable | null>(null);
@@ -39,18 +38,12 @@ export default function MapComponent({ isDark, onStatsLoaded }: MapComponentProp
     (async () => {
       const L = (await import('leaflet')).default;
       if (cancelled || mapRef.current) return;
-
       const map = L.map(containerRef.current!, {
-        center: [25, 80],
-        zoom: 4,
-        zoomControl: false,
-        minZoom: 3,
-        maxZoom: 14,
-        worldCopyJump: false,
+        center: [25, 80], zoom: 4,
+        zoomControl: false, minZoom: 3, maxZoom: 14, worldCopyJump: false,
       });
       L.control.zoom({ position: 'topright' }).addTo(map);
       mapRef.current = map;
-
       const url = isDark
         ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
         : 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
@@ -78,24 +71,29 @@ export default function MapComponent({ isDark, onStatsLoaded }: MapComponentProp
   // ── Load country meta + stats whenever country changes ─────────────
   useEffect(() => {
     let alive = true;
+    app.setLoading(true);
     (async () => {
-      const idx = await loadCountries();
-      const c = idx.countries.find(x => x.code === app.countryCode);
-      if (!alive || !c) return;
-      const s = await loadStats(app.countryCode);
-      if (!alive) return;
-      setCountry(c);
-      setStats(s);
-      onStatsLoaded?.(s, c);
-      // Fly to country bbox
-      if (mapRef.current && c.bbox) {
-        const L = (await import('leaflet')).default;
-        const [w, s2, e, n] = c.bbox;
-        mapRef.current.fitBounds(L.latLngBounds([s2, w], [n, e]), { padding: [20, 20] });
+      try {
+        const idx = await loadCountries();
+        const c = idx.countries.find(x => x.code === app.countryCode);
+        if (!alive || !c) return;
+        const s = await loadStats(app.countryCode);
+        if (!alive) return;
+        setCountry(c);
+        setStats(s);
+        onStatsLoaded?.(s, c);
+        if (mapRef.current && c.bbox) {
+          const L = (await import('leaflet')).default;
+          const [w, s2, e, n] = c.bbox;
+          mapRef.current.fitBounds(L.latLngBounds([s2, w], [n, e]), { padding: [20, 20] });
+        }
+      } finally {
+        if (alive) app.setLoading(false);
       }
     })();
     return () => { alive = false; };
-  }, [app.countryCode, onStatsLoaded]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [app.countryCode]);
 
   // ── Render boundary choropleth ────────────────────────────────────
   useEffect(() => {
@@ -109,22 +107,33 @@ export default function MapComponent({ isDark, onStatsLoaded }: MapComponentProp
       const fc = await loadBoundary(country.code, lvl);
       if (!alive || !mapRef.current) return;
 
-      // Compute breaks over visible-by-province subset (uses CURRENT state).
+      // Pick the right stats table for this level (district vs province aggregate).
+      const activeStats = statsForLevel(stats, app.level);
       const m = METRIC_BY_KEY[app.metric];
+
+      // Build the visible-id filter:
+      //   - province filter: at admin2, keep districts whose parent is selected;
+      //                      at admin1, keep selected provinces only.
+      //   - hideZeroAffected: drop regions with affected_pop_total == 0.
       const provinceFilter = app.provinceFilter;
-      const filterIds = (() => {
-        if (lvl !== 2 || provinceFilter.size === 0) return undefined;
+      const visibleFilter: Set<string> | undefined = (() => {
+        if (provinceFilter.size === 0 && !app.hideZeroAffected) return undefined;
         const allowed = new Set<string>();
-        for (const [id, d] of Object.entries(stats)) {
-          if (provinceFilter.has(d.parent_id ?? '')) allowed.add(id);
+        for (const [id, d] of Object.entries(activeStats)) {
+          if (provinceFilter.size > 0) {
+            if (lvl === 1 && !provinceFilter.has(id)) continue;
+            if (lvl === 2 && !provinceFilter.has(d.parent_id ?? '')) continue;
+          }
+          if (app.hideZeroAffected && (d.affected_pop_total ?? 0) <= 0) continue;
+          allowed.add(id);
         }
         return allowed;
       })();
 
       const allValues: number[] = [];
-      for (const [id, d] of Object.entries(stats)) {
-        if (filterIds && !filterIds.has(id)) continue;
-        const v = (d as Record<string, unknown>)[app.metric];
+      for (const [id, d] of Object.entries(activeStats)) {
+        if (visibleFilter && !visibleFilter.has(id)) continue;
+        const v = (d as unknown as Record<string, unknown>)[app.metric];
         if (typeof v === 'number') allValues.push(v);
       }
       const breaks = quantileBreaks(allValues, 5);
@@ -138,15 +147,15 @@ export default function MapComponent({ isDark, onStatsLoaded }: MapComponentProp
 
       const styleFor = (feat: Feature) => {
         const id = String(feat.id ?? feat.properties?.id ?? '');
-        const d = stats[id];
-        const v = d ? ((d as Record<string, unknown>)[app.metric] as number) : NaN;
-        const inFilter = !filterIds || filterIds.has(id);
+        const d = activeStats[id];
+        const v = d ? ((d as unknown as Record<string, unknown>)[app.metric] as number) : NaN;
+        const inFilter = !visibleFilter || visibleFilter.has(id);
         const inRange = (
           (app.metricMin === null || v >= app.metricMin) &&
           (app.metricMax === null || v <= app.metricMax)
         );
         const passes = inFilter && inRange && d !== undefined;
-        const isSel = app.selectedDistrictId === id;
+        const isSel = app.selectedRegionId === id;
         return {
           fillColor: passes ? ramp[bucketIndex(v, breaks)] : (isDark ? '#1a1a1a' : '#e5e7eb'),
           fillOpacity: passes ? (isSel ? 0.95 : 0.78) : 0.1,
@@ -163,9 +172,10 @@ export default function MapComponent({ isDark, onStatsLoaded }: MapComponentProp
             mouseover(e: any) {
               e.target.setStyle({ weight: 2.5, color: '#facc15' });
               e.target.bringToFront();
-              const s = statsSnap.current?.[id];
+              const curStats = statsForLevel(statsSnap.current ?? {}, stateSnap.current.level);
+              const s = curStats[id];
               const md = METRIC_BY_KEY[stateSnap.current.metric];
-              const v = s ? ((s as Record<string, unknown>)[stateSnap.current.metric] as number) : undefined;
+              const v = s ? ((s as unknown as Record<string, unknown>)[stateSnap.current.metric] as number) : undefined;
               const subtitle = s?.parent_name ?? feat.properties?.parent_name ?? '';
               const html = `
                 <div style="min-width:180px">
@@ -177,11 +187,11 @@ export default function MapComponent({ isDark, onStatsLoaded }: MapComponentProp
                   </div>
                   ${s ? `
                   <div style="display:flex;justify-content:space-between;margin-top:3px">
-                    <span style="color:#94a3b8;font-size:10px">Affected pop.</span>
+                    <span style="color:#94a3b8;font-size:10px">Flood-Aff. Population</span>
                     <span style="font-size:10px">${formatMetric(s.affected_pop_total, METRIC_BY_KEY.affected_pop_total)}</span>
                   </div>
                   <div style="display:flex;justify-content:space-between;margin-top:2px">
-                    <span style="color:#94a3b8;font-size:10px">Health / Schools</span>
+                    <span style="color:#94a3b8;font-size:10px">Flood-Aff. Health / Schools</span>
                     <span style="font-size:10px">${s.health_count} / ${s.school_count}</span>
                   </div>` : ''}
                   <div style="margin-top:6px;padding-top:5px;border-top:1px solid rgba(255,255,255,0.08);font-size:9px;color:#64748b">Click for details →</div>
@@ -193,12 +203,10 @@ export default function MapComponent({ isDark, onStatsLoaded }: MapComponentProp
               e.target.closeTooltip();
             },
             click() {
-              if (lvl === 2) {
-                stateSnap.current.selectDistrict(id);
-              } else if (lvl === 1) {
-                // clicking a province at admin1 toggles the filter
-                stateSnap.current.toggleProvince(id);
-              }
+              // Click selects whichever entity the current level shows
+              // (district at admin2, province at admin1, country at admin0).
+              if (lvl === 0) return;
+              stateSnap.current.selectRegion(id);
             },
           });
         },
@@ -207,7 +215,7 @@ export default function MapComponent({ isDark, onStatsLoaded }: MapComponentProp
       boundaryRef.current = layer;
     })();
     return () => { alive = false; };
-  }, [stats, country, app.level, app.metric, app.provinceFilter, app.metricMin, app.metricMax, app.selectedDistrictId, isDark]);
+  }, [stats, country, app.level, app.metric, app.provinceFilter, app.metricMin, app.metricMax, app.selectedRegionId, app.hideZeroAffected, isDark]);
 
   // ── Render point overlays (health / schools) ───────────────────────
   useEffect(() => {
@@ -218,7 +226,6 @@ export default function MapComponent({ isDark, onStatsLoaded }: MapComponentProp
       const L = (await import('leaflet')).default;
       const desired = new Set(app.pointLayers);
 
-      // Remove layers no longer wanted
       for (const kind of Object.keys(pointLayersRef.current)) {
         if (!desired.has(kind as any)) {
           mapRef.current.removeLayer(pointLayersRef.current[kind]);
@@ -238,22 +245,20 @@ export default function MapComponent({ isDark, onStatsLoaded }: MapComponentProp
         for (const f of fc.features) {
           if (!f.geometry || f.geometry.type !== 'Point') continue;
           const props = (f.properties ?? {}) as Record<string, unknown>;
-          // Apply amenity filter (health only)
           if (isHealth && stateSnap.current.amenityFilter.size > 0) {
             const a = String(props.amenity ?? 'unknown');
             if (!stateSnap.current.amenityFilter.has(a)) continue;
           }
           const [lon, lat] = (f.geometry as any).coordinates;
           const m = L.circleMarker([lat, lon], {
-            radius: 3.5,
-            color: baseColor,
-            weight: 1,
-            fillColor: baseColor,
-            fillOpacity: 0.6,
+            radius: 3.5, color: baseColor, weight: 1,
+            fillColor: baseColor, fillOpacity: 0.6,
           });
           const name = (props.name as string) || (props.amenity as string) || kind;
           const amenity = (props.amenity as string) || '';
-          m.bindTooltip(`<b>${name}</b>${amenity ? `<br><span style="color:#94a3b8;font-size:10px">${amenity}</span>` : ''}`,
+          const kindLabel = isHealth ? 'Flood-Aff. Health Facility' : 'Flood-Aff. School';
+          m.bindTooltip(
+            `<b>${name}</b><br><span style="color:#94a3b8;font-size:10px">${kindLabel}${amenity ? ' · ' + amenity : ''}</span>`,
             { direction: 'top', offset: [0, -2] });
           group.addLayer(m);
         }
@@ -264,13 +269,15 @@ export default function MapComponent({ isDark, onStatsLoaded }: MapComponentProp
     return () => { alive = false; };
   }, [country, app.pointLayers, app.amenityFilter]);
 
-  // ── Fly to selected district ───────────────────────────────────────
+  // ── Fly to selected region (district or province) ──────────────────
   useEffect(() => {
-    if (!mapRef.current || !stats || !app.selectedDistrictId) return;
-    const d = stats[app.selectedDistrictId];
+    if (!mapRef.current || !stats || !app.selectedRegionId) return;
+    const activeStats = statsForLevel(stats, app.level);
+    const d = activeStats[app.selectedRegionId];
     if (!d || d.center_lat == null || d.center_lon == null) return;
-    mapRef.current.flyTo([d.center_lat, d.center_lon], Math.max(7, mapRef.current.getZoom()), { duration: 0.8 });
-  }, [app.selectedDistrictId, stats]);
+    const targetZoom = app.level === 'admin1' ? 6 : Math.max(7, mapRef.current.getZoom());
+    mapRef.current.flyTo([d.center_lat, d.center_lon], targetZoom, { duration: 0.8 });
+  }, [app.selectedRegionId, app.level, stats]);
 
   return <div ref={containerRef} style={{ width: '100%', height: '100%' }} />;
 }

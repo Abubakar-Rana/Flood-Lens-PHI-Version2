@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Crosshair, Layers, ChevronDown, RotateCcw } from 'lucide-react';
+import { Crosshair, Layers, ChevronDown, RotateCcw, Loader2 } from 'lucide-react';
 import { useApp } from '@/lib/state';
 import { METRIC_BY_KEY } from '@/lib/types';
 import MapLegend from './MapLegend';
@@ -49,12 +49,26 @@ export default function MapOverlay({ isDark }: { isDark: boolean }) {
       </div>
 
       {/* Top-right: reset selection */}
-      {app.selectedDistrictId && (
+      {app.selectedRegionId && (
         <div className="absolute top-4 right-14 z-[1000]">
-          <button onClick={() => app.selectDistrict(null)}
+          <button onClick={() => app.selectRegion(null)}
             style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 8, cursor: 'pointer', background: glassBg, border: `1px solid ${glassBorder}`, color: tm, fontSize: 11, backdropFilter: 'blur(10px)' }}>
             <RotateCcw size={11} /> Clear selection
           </button>
+        </div>
+      )}
+
+      {/* Loading overlay — center of map */}
+      {app.loading && (
+        <div className="absolute inset-0 z-[999] pointer-events-none flex items-center justify-center">
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px', borderRadius: 12,
+            background: glassBg, border: `1px solid ${glassBorder}`, backdropFilter: 'blur(12px)',
+            boxShadow: '0 4px 24px rgba(0,0,0,0.25)',
+          }}>
+            <Loader2 size={14} style={{ color: '#c8a951', animation: 'spin 1s linear infinite' }} />
+            <span style={{ color: tp, fontSize: 12, fontWeight: 600 }}>Loading {app.countryCode.toUpperCase()} data…</span>
+          </div>
         </div>
       )}
 
@@ -70,6 +84,7 @@ export default function MapOverlay({ isDark }: { isDark: boolean }) {
           <MapLegend isDark={isDark} />
         </div>
       </div>
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </>
   );
 }

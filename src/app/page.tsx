@@ -4,7 +4,7 @@ import { useState } from 'react';
 import dynamic from 'next/dynamic';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { ThemeProvider, useTheme } from '@/lib/theme';
-import { AppStateProvider } from '@/lib/state';
+import { AppStateProvider, useApp } from '@/lib/state';
 import Navbar from '@/components/layout/Navbar';
 import Sidebar from '@/components/layout/Sidebar';
 import StatsPanel from '@/components/stats/StatsPanel';
@@ -22,6 +22,30 @@ const MapComponent = dynamic(() => import('@/components/map/MapComponent'), {
   ),
 });
 
+// Slim animated bar pinned under the navbar — visible whenever app.loading is true.
+function LoadingBar() {
+  const app = useApp();
+  if (!app.loading) return null;
+  return (
+    <div style={{
+      position: 'absolute', top: 0, left: 0, right: 0, height: 2,
+      background: 'rgba(200,169,81,0.15)', overflow: 'hidden', zIndex: 1100,
+    }}>
+      <div style={{
+        height: '100%', width: '40%',
+        background: 'linear-gradient(90deg, transparent, #c8a951, transparent)',
+        animation: 'loading-slide 1.1s ease-in-out infinite',
+      }} />
+      <style>{`
+        @keyframes loading-slide {
+          0%   { transform: translateX(-100%); }
+          100% { transform: translateX(350%); }
+        }
+      `}</style>
+    </div>
+  );
+}
+
 function Dashboard() {
   const { isDark } = useTheme();
   const [statsVisible, setStatsVisible] = useState(true);
@@ -29,7 +53,8 @@ function Dashboard() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: isDark ? '#080e1c' : '#f2f5f9', transition: 'background .25s' }}>
       <Navbar />
-      <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+      <div style={{ position: 'relative', display: 'flex', flex: 1, overflow: 'hidden' }}>
+        <LoadingBar />
         <Sidebar />
 
         <main style={{ position: 'relative', flex: 1, overflow: 'hidden' }}>
