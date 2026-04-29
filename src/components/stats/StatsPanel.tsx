@@ -314,7 +314,7 @@ function DetailView({ region, regionLevel, app, md, stats, regionRow, isDark, ca
       {/* Population block */}
       <div style={{ padding: 12, borderRadius: 10, background: 'rgba(239,68,68,0.06)', border: `1px solid rgba(239,68,68,0.25)`, marginBottom: 12 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#ef4444', fontSize: 10, fontWeight: 700, marginBottom: 8, letterSpacing: '0.06em' }}>
-          <Users size={11} /> FLOOD-AFFECTED POPULATION
+          <Users size={11} /> EXPOSED POPULATION
         </div>
         <Row label="Total" value={formatInt(region.affected_pop_total)} isDark={isDark} />
         <Row label="Mean per ~100m pixel" value={formatNumber(region.affected_pop_mean)} isDark={isDark} />
@@ -325,7 +325,7 @@ function DetailView({ region, regionLevel, app, md, stats, regionRow, isDark, ca
       {/* Children block */}
       <div style={{ padding: 12, borderRadius: 10, background: 'rgba(245,158,11,0.06)', border: `1px solid rgba(245,158,11,0.25)`, marginBottom: 12 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#f59e0b', fontSize: 10, fontWeight: 700, marginBottom: 8, letterSpacing: '0.06em' }}>
-          <Users size={11} /> FLOOD-AFFECTED CHILDREN
+          <Users size={11} /> EXPOSED CHILDREN
         </div>
         <Row label="Total" value={formatInt(region.affected_child_pop_total)} isDark={isDark} />
         <Row label="Mean per pixel" value={formatNumber(region.affected_child_pop_mean)} isDark={isDark} />
@@ -335,11 +335,11 @@ function DetailView({ region, regionLevel, app, md, stats, regionRow, isDark, ca
       {/* Health block */}
       <div style={{ padding: 12, borderRadius: 10, background: 'rgba(34,197,94,0.06)', border: `1px solid rgba(34,197,94,0.25)`, marginBottom: 12 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#22c55e', fontSize: 10, fontWeight: 700, marginBottom: 8, letterSpacing: '0.06em' }}>
-          <Hospital size={11} /> FLOOD-AFFECTED HEALTH FACILITIES
+          <Hospital size={11} /> EXPOSED HEALTH FACILITIES
         </div>
-        <Row label="Flood-affected facility count" value={String(region.health_count)} isDark={isDark} />
+        <Row label="Exposed facility count" value={String(region.health_count)} isDark={isDark} />
         <Row label="Per 1000 km²" value={formatNumber(region.health_per_1k_sqkm)} isDark={isDark} />
-        <Row label="Per 100k flood-affected" value={formatNumber(region.health_per_100k_affected)} isDark={isDark} />
+        <Row label="Per 100k exposed" value={formatNumber(region.health_per_100k_affected)} isDark={isDark} />
         <Row label="People per facility (strain)" value={formatInt(region.affected_per_health_facility)} isDark={isDark} />
         {Object.keys(region.health_amenity_breakdown ?? {}).length > 0 && (
           <div style={{ marginTop: 8 }}>
@@ -360,11 +360,11 @@ function DetailView({ region, regionLevel, app, md, stats, regionRow, isDark, ca
       {/* Schools block */}
       <div style={{ padding: 12, borderRadius: 10, background: 'rgba(59,130,246,0.06)', border: `1px solid rgba(59,130,246,0.25)`, marginBottom: 12 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#3b82f6', fontSize: 10, fontWeight: 700, marginBottom: 8, letterSpacing: '0.06em' }}>
-          <GraduationCap size={11} /> FLOOD-AFFECTED SCHOOLS
+          <GraduationCap size={11} /> EXPOSED SCHOOLS
         </div>
-        <Row label="Flood-affected school count" value={String(region.school_count)} isDark={isDark} />
+        <Row label="Exposed school count" value={String(region.school_count)} isDark={isDark} />
         <Row label="Per 1000 km²" value={formatNumber(region.school_per_1k_sqkm)} isDark={isDark} />
-        <Row label="Per 100k flood-affected children" value={formatNumber(region.school_per_100k_affected_children)} isDark={isDark} />
+        <Row label="Per 100k exposed children" value={formatNumber(region.school_per_100k_affected_children)} isDark={isDark} />
         <Row label="Children per school (strain)" value={formatInt(region.affected_children_per_school)} isDark={isDark} />
       </div>
 
@@ -410,10 +410,10 @@ function CountryView({ country, all, isDark, cardBg, border, bg, ts, tm, tp }: a
     <div style={{ padding: 14 }}>
       <div style={{ color: tm, fontSize: 9, letterSpacing: '0.06em', marginBottom: 8 }}>NATIONAL TOTALS</div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-        <Tile color="#ef4444" icon={Users} label="Flood-Aff. Pop." value={formatInt(totals.affected_pop_total)} />
-        <Tile color="#f59e0b" icon={Users} label="Flood-Aff. Children" value={formatInt(totals.affected_child_pop_total)} />
-        <Tile color="#22c55e" icon={Hospital} label="Flood-Aff. Health" value={formatInt(totals.health_count)} />
-        <Tile color="#3b82f6" icon={GraduationCap} label="Flood-Aff. Schools" value={formatInt(totals.school_count)} />
+        <Tile color="#ef4444" icon={Users} label="Exposed Pop." value={formatInt(totals.affected_pop_total)} />
+        <Tile color="#f59e0b" icon={Users} label="Exposed Children" value={formatInt(totals.affected_child_pop_total)} />
+        <Tile color="#22c55e" icon={Hospital} label="Exposed Health" value={formatInt(totals.health_count)} />
+        <Tile color="#3b82f6" icon={GraduationCap} label="Exposed Schools" value={formatInt(totals.school_count)} />
         <Tile color="#a855f7" icon={MapPin} label="Districts" value={formatInt(totals.district_count)} />
         <Tile color="#14b8a6" icon={Ruler} label="Area (km²)" value={formatInt(totals.area_sqkm)} />
       </div>
@@ -423,7 +423,7 @@ function CountryView({ country, all, isDark, cardBg, border, bg, ts, tm, tp }: a
         <div style={{ marginTop: 14, padding: 12, borderRadius: 10, background: cardBg, border: `1px solid ${border}` }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
             <Building2 size={11} style={{ color: '#22c55e' }} />
-            <span style={{ color: ts, fontSize: 10, fontWeight: 700, letterSpacing: '0.06em' }}>FLOOD-AFF. HEALTH AMENITY MIX</span>
+            <span style={{ color: ts, fontSize: 10, fontWeight: 700, letterSpacing: '0.06em' }}>EXPOSED HEALTH AMENITY MIX</span>
           </div>
           <ResponsiveContainer width="100%" height={Math.max(120, Object.keys(totals.health_amenity_breakdown).length * 18)}>
             <BarChart layout="vertical" data={Object.entries(totals.health_amenity_breakdown).map(([k, v]) => ({ k, v: v as number })).sort((a, b) => b.v - a.v)}
@@ -440,7 +440,7 @@ function CountryView({ country, all, isDark, cardBg, border, bg, ts, tm, tp }: a
       {/* Cross-country comparison strip */}
       <div style={{ marginTop: 14, padding: 12, borderRadius: 10, background: cardBg, border: `1px solid ${border}` }}>
         <div style={{ color: ts, fontSize: 10, fontWeight: 700, marginBottom: 6, letterSpacing: '0.06em' }}>VS OTHER COUNTRIES</div>
-        <div style={{ color: tm, fontSize: 9, marginBottom: 6 }}>Total flood-affected population.</div>
+        <div style={{ color: tm, fontSize: 9, marginBottom: 6 }}>Total exposed population.</div>
         <ResponsiveContainer width="100%" height={Math.max(140, all.countries.length * 22)}>
           <BarChart layout="vertical"
             data={all.countries.map((c: CountryInfo) => ({ name: c.name, value: c.totals.affected_pop_total, code: c.code }))
@@ -462,12 +462,12 @@ function CountryView({ country, all, isDark, cardBg, border, bg, ts, tm, tp }: a
       {/* Per-capita summary */}
       <div style={{ marginTop: 14, padding: 12, borderRadius: 10, background: cardBg, border: `1px solid ${border}` }}>
         <div style={{ color: ts, fontSize: 10, fontWeight: 700, marginBottom: 6, letterSpacing: '0.06em' }}>DERIVED RATIOS</div>
-        <Row label="Children share of flood-affected" value={`${(totals.affected_child_pop_total / Math.max(1, totals.affected_pop_total) * 100).toFixed(2)}%`} isDark={isDark} />
-        <Row label="Flood-aff. health per 100k flood-aff." value={formatNumber(totals.health_count / Math.max(1, totals.affected_pop_total) * 100000)} isDark={isDark} />
-        <Row label="Flood-aff. schools per 100k flood-aff. children" value={formatNumber(totals.school_count / Math.max(1, totals.affected_child_pop_total) * 100000)} isDark={isDark} />
-        <Row label="Flood-aff. health per 1000 km²" value={formatNumber(totals.health_count / Math.max(1, totals.area_sqkm) * 1000)} isDark={isDark} />
-        <Row label="People per flood-aff. health facility" value={formatInt(totals.affected_pop_total / Math.max(1, totals.health_count))} isDark={isDark} />
-        <Row label="Children per flood-aff. school" value={formatInt(totals.affected_child_pop_total / Math.max(1, totals.school_count))} isDark={isDark} />
+        <Row label="Children share of exposed" value={`${(totals.affected_child_pop_total / Math.max(1, totals.affected_pop_total) * 100).toFixed(2)}%`} isDark={isDark} />
+        <Row label="Exposed health per 100k exposed" value={formatNumber(totals.health_count / Math.max(1, totals.affected_pop_total) * 100000)} isDark={isDark} />
+        <Row label="Exposed schools per 100k exposed children" value={formatNumber(totals.school_count / Math.max(1, totals.affected_child_pop_total) * 100000)} isDark={isDark} />
+        <Row label="Exposed health per 1000 km²" value={formatNumber(totals.health_count / Math.max(1, totals.area_sqkm) * 1000)} isDark={isDark} />
+        <Row label="People per exposed health facility" value={formatInt(totals.affected_pop_total / Math.max(1, totals.health_count))} isDark={isDark} />
+        <Row label="Children per exposed school" value={formatInt(totals.affected_child_pop_total / Math.max(1, totals.school_count))} isDark={isDark} />
       </div>
     </div>
   );
