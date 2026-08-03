@@ -204,6 +204,25 @@ body {
 }
 [data-theme="light"] .leaflet-popup-tip { background: #ffffff !important; }
 
+/* ═══════════════════════════════════════════════════════════
+   SATELLITE FLOOD EXTENT OVERLAY
+   The PNG is a max-pooled binary mask, so every lit pixel is a real
+   detection. Smoothing it on upscale would invent partial coverage
+   between cells — keep it hard-edged at every zoom.
+═══════════════════════════════════════════════════════════ */
+.flood-extent-overlay {
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  mix-blend-mode: screen;
+}
+[data-theme="light"] .flood-extent-overlay { mix-blend-mode: multiply; }
+
+/* Screen-reader-only text (chart summaries) */
+.sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0;
+}
+
 /* Tooltip unified */
 .leaflet-tooltip {
   background: var(--bg-panel) !important;

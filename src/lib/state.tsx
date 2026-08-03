@@ -1,10 +1,17 @@
 'use client';
 
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react';
-import type { AdminLevel, FilterState, MetricKey, PointLayer, PresetKey } from './types';
+import { LENS_BY_KEY, type AdminLevel, type FilterState, type LensKey, type MetricKey, type PointLayer, type PresetKey } from './types';
+
+export const LATEST_OBSERVED_YEAR = 2026;
 
 const DEFAULT_STATE: FilterState = {
   countryCode: 'pak',
+  year: '2026',
+  scrubYear: LATEST_OBSERVED_YEAR,
+  lens: 'people',
+  advanced: false,
+  showExtent: true,
   level: 'admin2',
   metric: 'affected_pop_total',
   selectedRegionId: null,
@@ -25,6 +32,11 @@ interface AppCtx extends FilterState {
   setLoading: (v: boolean) => void;
 
   setCountry: (code: string) => void;
+  setYear: (id: string) => void;
+  setScrubYear: (y: number) => void;
+  setLens: (l: LensKey) => void;
+  toggleAdvanced: () => void;
+  toggleExtent: () => void;
   setLevel: (l: AdminLevel) => void;
   setMetric: (m: MetricKey) => void;
   selectRegion: (id: string | null) => void;
@@ -55,12 +67,44 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     preset: null,
   })), []);
 
+  // Switching year keeps the region, level and lens so the reader's place in
+  // the story survives; only the numeric filters (which are year-specific)
+  // reset. Scrubbing snaps back to the observed year of the chosen track.
+  const setYear = useCallback((year: string) => setS(p => {
+    const scrubYear = Number(year) || LATEST_OBSERVED_YEAR;
+    // 'Land flooded' only exists for observed events; fall back to people.
+    const lens = year === '2025' && p.lens === 'water' ? 'people' : p.lens;
+    const metric = lens && lens !== p.lens ? LENS_BY_KEY[lens].metric : p.metric;
+    return { ...p, year, scrubYear, lens, metric, metricMin: null, metricMax: null, preset: null };
+  }), []);
+
+  const setScrubYear = useCallback((scrubYear: number) => setS(p => ({
+    ...p, scrubYear,
+  })), []);
+
+  // A lens is the whole interaction for a non-expert: it picks the metric and
+  // turns on the matching point overlay in one click.
+  const setLens = useCallback((lens: LensKey) => setS(p => {
+    const def = LENS_BY_KEY[lens];
+    const pointLayers = new Set<PointLayer>();
+    if (def.points) pointLayers.add(def.points);
+    return {
+      ...p, lens, metric: def.metric, pointLayers,
+      metricMin: null, metricMax: null, preset: null,
+    };
+  }), []);
+
+  const toggleAdvanced = useCallback(() => setS(p => ({ ...p, advanced: !p.advanced })), []);
+  const toggleExtent = useCallback(() => setS(p => ({ ...p, showExtent: !p.showExtent })), []);
+
   const setLevel = useCallback((level: AdminLevel) => setS(p => ({
     ...p, level, selectedRegionId: null,
   })), []);
 
+  // Choosing a raw metric leaves the lens behind — the two would otherwise
+  // disagree about what the map is showing.
   const setMetric = useCallback((metric: MetricKey) => setS(p => ({
-    ...p, metric, metricMin: null, metricMax: null, preset: null,
+    ...p, metric, lens: null, metricMin: null, metricMax: null, preset: null,
   })), []);
 
   const selectRegion = useCallback((id: string | null) => setS(p => ({
@@ -100,16 +144,20 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
 
   const resetFilters = useCallback(() => setS(p => ({
     ...DEFAULT_STATE, countryCode: p.countryCode, level: p.level,
+    year: p.year, scrubYear: Number(p.year) || LATEST_OBSERVED_YEAR,
+    advanced: p.advanced,
   })), []);
 
   const value = useMemo<AppCtx>(() => ({
     ...s, loading, setLoading,
-    setCountry, setLevel, setMetric, selectRegion,
+    setCountry, setYear, setScrubYear, setLens, toggleAdvanced, toggleExtent,
+    setLevel, setMetric, selectRegion,
     toggleProvince, clearProvinces,
     toggleAmenity, clearAmenities,
     setMetricRange, togglePointLayer, setSearch,
     setPreset, toggleHideZeroAffected, resetFilters,
-  }), [s, loading, setCountry, setLevel, setMetric, selectRegion,
+  }), [s, loading, setCountry, setYear, setScrubYear, setLens, toggleAdvanced,
+       toggleExtent, setLevel, setMetric, selectRegion,
        toggleProvince, clearProvinces, toggleAmenity, clearAmenities,
        setMetricRange, togglePointLayer, setSearch,
        setPreset, toggleHideZeroAffected, resetFilters]);

@@ -1,0 +1,33 @@
+{
+  "years": [
+    {
+      "id": "2025",
+      "label": "2025 Baseline",
+      "short": "2025",
+      "kind": "exposure",
+      "headline": "People living in flood-prone land",
+      "blurb": "Everyone whose home sits inside a mapped flood-prone zone \u2014 the standing risk, not a single flood.",
+      "statsFile": "stats.json",
+      "window": null
+    },
+    {
+      "id": "2026",
+      "label": "2026 July Flood",
+      "short": "2026",
+      "kind": "event",
+      "headline": "People hit by the July 2026 flood",
+      "blurb": "What the satellites actually saw flooded between 2026-07-23 and 2026-07-28.",
+      "statsFile": "stats-2026.json",
+      "eventFile": "event-2026.json",
+      "window": {
+        "start": "2026-07-23",
+        "end": "2026-07-28"
+      }
+    }
+  ],
+  "defaultYear": "2026",
+  "projectionRange": [
+    2027,
+    2032
+  ]
+}

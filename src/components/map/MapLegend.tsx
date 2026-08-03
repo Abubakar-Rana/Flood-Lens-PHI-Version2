@@ -3,16 +3,21 @@
 import { useEffect, useState } from 'react';
 import { useApp } from '@/lib/state';
 import { loadStats } from '@/lib/data';
-import { METRIC_BY_KEY, type StatsTable } from '@/lib/types';
+import { LENS_BY_KEY, METRIC_BY_KEY, type StatsTable } from '@/lib/types';
 import { formatMetric, getRamp, quantileBreaks, metricValues, statsForLevel } from '@/lib/utils';
 
 export default function MapLegend({ isDark }: { isDark: boolean }) {
   const app = useApp();
   const [stats, setStats] = useState<StatsTable | null>(null);
 
-  useEffect(() => { loadStats(app.countryCode).then(setStats); }, [app.countryCode]);
+  useEffect(() => {
+    let alive = true;
+    loadStats(app.countryCode, app.year).then(s => alive && setStats(s));
+    return () => { alive = false; };
+  }, [app.countryCode, app.year]);
 
   const m = METRIC_BY_KEY[app.metric];
+  const lens = app.lens ? LENS_BY_KEY[app.lens] : null;
   const ramp = getRamp(m.semantics, isDark);
 
   let breaks: number[] = [];
@@ -41,8 +46,10 @@ export default function MapLegend({ isDark }: { isDark: boolean }) {
 
   return (
     <div style={{ background: bg, border: `1px solid ${border}`, borderRadius: 10, padding: 10, minWidth: 200, backdropFilter: 'blur(10px)' }}>
-      <div style={{ color: tp, fontSize: 11, fontWeight: 700, marginBottom: 4 }}>{m.short}</div>
-      <div style={{ color: tm, fontSize: 9, marginBottom: 8 }}>{m.label}{m.unit ? ` (${m.unit})` : ''}</div>
+      <div style={{ color: tp, fontSize: 11, fontWeight: 700, marginBottom: 4 }}>{lens?.label ?? m.short}</div>
+      <div style={{ color: tm, fontSize: 9, marginBottom: 8 }}>
+        {lens?.question ?? `${m.label}${m.unit ? ` (${m.unit})` : ''}`}
+      </div>
       {breaks.length === 5 ? (
         <div>
           {ramp.map((c, i) => {

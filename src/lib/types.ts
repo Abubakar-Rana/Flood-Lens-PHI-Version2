@@ -56,6 +56,11 @@ export interface DistrictStats {
 
   health_amenity_breakdown: Record<string, number>;
 
+  // Event years only (2026+). Measured straight off the flood-extent raster,
+  // so unlike the apportioned population fields these are observations.
+  flood_extent_km2?: number;
+  flood_extent_pct?: number;
+
   // Required for dynamic-key access (stats[id][metricKey]) without unsafe casts
   [k: string]: unknown;
 }
@@ -83,6 +88,8 @@ export type MetricKey =
   | 'school_per_100k_affected_children'
   | 'affected_per_health_facility'
   | 'affected_children_per_school'
+  | 'flood_extent_km2'
+  | 'flood_extent_pct'
   | 'area_sqkm';
 
 export interface MetricDef {
@@ -152,6 +159,13 @@ export const METRICS: MetricDef[] = [
     semantics: 'hot', format: 'integer', group: 'schools',
     description: 'How many exposed children share each exposed school — service-strain indicator.' },
 
+  { key: 'flood_extent_km2', label: 'Land Under Water', short: 'Land flooded', unit: 'km²',
+    semantics: 'neutral', format: 'float', group: 'geography',
+    description: 'Land the satellites saw under water during the event.' },
+  { key: 'flood_extent_pct', label: 'Share of District Flooded', short: 'District flooded', unit: '%',
+    semantics: 'neutral', format: 'percent', group: 'geography',
+    description: 'How much of the district went under water.' },
+
   { key: 'area_sqkm', label: 'Area', short: 'Area', unit: 'km²',
     semantics: 'neutral', format: 'float', group: 'geography',
     description: 'District area in square kilometres.' },
@@ -160,12 +174,176 @@ export const METRICS: MetricDef[] = [
 export const METRIC_BY_KEY: Record<MetricKey, MetricDef> =
   METRICS.reduce((a, m) => { a[m.key] = m; return a; }, {} as Record<MetricKey, MetricDef>);
 
+// ─── Years ───────────────────────────────────────────────────────────────
+// Mirrors public/web-data/years.json, written by scripts/etl/event2026.py.
+//
+// Two kinds of year exist and they are NOT comparable on one axis:
+//   'exposure' — everyone living in a mapped flood-prone zone (2025: 33.9M
+//                for Pakistan). A standing condition, not an occurrence.
+//   'event'    — who a specific observed flood actually reached (2026: 222k).
+// Anything that plots or narrates them must keep the two tracks apart.
+
+export type YearKind = 'exposure' | 'event';
+
+export interface YearDef {
+  id: string;               // '2025' | '2026'
+  label: string;            // '2026 July Flood'
+  short: string;            // '2026'
+  kind: YearKind;
+  headline: string;         // plain-language "what this number is"
+  blurb: string;
+  statsFile: string;        // resolved against /web-data/<code>/
+  eventFile?: string;
+  window: { start: string; end: string } | null;
+}
+
+export interface YearRegistry {
+  years: YearDef[];
+  defaultYear: string;
+  projectionRange: [number, number];
+}
+
+// ─── Observed event (event-<id>.json) ────────────────────────────────────
+
+export interface EventFacts {
+  event_id: string;
+  country_code: string;
+  country_name: string;
+  window: { start: string; end: string };
+  /** Country-level figures exactly as printed in the published appendix. */
+  published: Record<string, number | null>;
+  /** Recomputed here from the flood rasters — cross-checks `published`. */
+  measured: {
+    flood_extent_km2: number;
+    districts_flooded: number;
+    districts_total: number;
+    health_near_flood: number;
+    schools_near_flood: number;
+    proximity_radius_km: number;
+  };
+  overlay: {
+    url: string;
+    bounds: [[number, number], [number, number]];  // [[s,w],[n,e]]
+    width: number;
+    height: number;
+    downsample_factor: number;
+  };
+  totals: CountryTotals;
+  pdma_points?: PdmaPoint[];
+}
+
+export interface PdmaPoint {
+  id: string;
+  lat: number;
+  lon: number;
+  note: string;
+  union_extent?: string;
+  fwdet_depth_m?: number | null;
+  rp100_depth_m?: number | null;
+  smod_class?: string;
+  ndwi_change?: number | null;
+}
+
+// ─── Timeline (timeline.json) ────────────────────────────────────────────
+
+export interface TimelinePoint {
+  year: number;
+  track: YearKind;
+  value: number;
+  label: string;
+  window?: [string, string];
+}
+
+export interface ProjectedPoint {
+  year: number;
+  central: number;
+  low: number;
+  high: number;
+}
+
+export interface Timeline {
+  observed: TimelinePoint[];
+  /** Expected people affected per year, integrated over the severity curve. */
+  expected_annual: number;
+  projected: ProjectedPoint[];
+  scenario: {
+    label: string;
+    value: number;
+    u18: number | null;
+    area_km2: number | null;
+    source: string;
+  };
+  assumptions: {
+    exposure_growth_pct_per_year: number;
+    severity_exponent: number;
+    observed_return_period_years: number;
+    note: string;
+  };
+}
+
+// ─── Lenses — the plain-language entry point ─────────────────────────────
+// A lens is one question a non-expert would actually ask. Picking one sets
+// the choropleth metric and any point overlay in a single click, so the
+// default flow never touches the metric catalog.
+
+export type LensKey = 'people' | 'children' | 'water' | 'hospitals' | 'schools';
+
+export interface LensDef {
+  key: LensKey;
+  /** Tile caption — what the big number counts. */
+  label: string;
+  /** The question this lens answers, in plain words. */
+  question: string;
+  metric: MetricKey;
+  /** Field read for the headline tile; usually the same as `metric`. */
+  totalKey: keyof CountryTotals | 'flood_extent_km2';
+  color: string;
+  points?: PointLayer;
+  /** Omitted = available in every year. */
+  kinds?: YearKind[];
+}
+
+export const LENSES: LensDef[] = [
+  { key: 'people', label: 'People', question: 'How many people are affected?',
+    metric: 'affected_pop_total', totalKey: 'affected_pop_total', color: '#ef4444' },
+  { key: 'children', label: 'Children', question: 'How many are children?',
+    metric: 'affected_child_pop_total', totalKey: 'affected_child_pop_total', color: '#f59e0b' },
+  { key: 'water', label: 'Land flooded', question: 'How much land went under water?',
+    metric: 'flood_extent_km2', totalKey: 'flood_extent_km2', color: '#38bdf8',
+    kinds: ['event'] },
+  { key: 'hospitals', label: 'Hospitals', question: 'Which hospitals are hit?',
+    metric: 'health_count', totalKey: 'health_count', color: '#22c55e', points: 'health' },
+  { key: 'schools', label: 'Schools', question: 'Which schools are hit?',
+    metric: 'school_count', totalKey: 'school_count', color: '#3b82f6', points: 'schools' },
+];
+
+export const LENS_BY_KEY: Record<LensKey, LensDef> =
+  LENSES.reduce((a, l) => { a[l.key] = l; return a; }, {} as Record<LensKey, LensDef>);
+
+export function lensesForKind(kind: YearKind): LensDef[] {
+  return LENSES.filter(l => !l.kinds || l.kinds.includes(kind));
+}
+
 // ─── App state shape ─────────────────────────────────────────────────────
 
 export type PointLayer = 'health' | 'schools';
 
 export interface FilterState {
   countryCode: string;
+  /** Which dataset year is loaded — an id from years.json. */
+  year: string;
+  /** Year the map is painted for. Equals `year` for observed data; beyond the
+   *  last observed year it indexes into the projection, and the map shows
+   *  scaled values. This is what ties the timeline to the map. */
+  scrubYear: number;
+  /** The plain-language question driving the view. Null only if the user
+   *  picked a raw metric from the advanced panel. */
+  lens: LensKey | null;
+  /** Advanced controls revealed. Off by default — the layman flow never
+   *  needs them, but nothing is removed for expert users. */
+  advanced: boolean;
+  /** Satellite flood-extent raster drawn over the basemap (event years). */
+  showExtent: boolean;
   level: AdminLevel;            // current choropleth level
   metric: MetricKey;
   // Currently selected region — district id at admin2, province id at admin1,

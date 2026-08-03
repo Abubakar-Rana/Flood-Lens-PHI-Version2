@@ -9,6 +9,7 @@ import Navbar from '@/components/layout/Navbar';
 import Sidebar from '@/components/layout/Sidebar';
 import StatsPanel from '@/components/stats/StatsPanel';
 import MapOverlay from '@/components/map/MapOverlay';
+import TimeBar from '@/components/time/TimeBar';
 
 const MapComponent = dynamic(() => import('@/components/map/MapComponent'), {
   ssr: false,
@@ -60,6 +61,7 @@ function Dashboard() {
         <main style={{ position: 'relative', flex: 1, overflow: 'hidden' }}>
           <MapComponent isDark={isDark} />
           <MapOverlay isDark={isDark} />
+          <TimeBar isDark={isDark} />
 
           <button
             onClick={() => setStatsVisible(v => !v)}

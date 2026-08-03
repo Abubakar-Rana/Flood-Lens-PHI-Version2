@@ -1,4 +1,4 @@
-import type { DistrictStats, MetricDef, MetricKey, PresetDef, StatsTable } from './types';
+import type { DistrictStats, MetricDef, MetricKey, PresetDef, StatsTable, Timeline } from './types';
 
 // ─── Number formatting ──────────────────────────────────────────────
 
@@ -15,6 +15,19 @@ export function formatInt(n: number): string {
   return Math.round(n).toLocaleString('en-US');
 }
 
+/** Headline numbers. Grouped digits up to a million — "221,571" is instantly
+ *  concrete in a way "221.6K" is not — and abbreviated only above that, where
+ *  the full string stops fitting and stops being read anyway. */
+export function formatBig(n: number): string {
+  if (!isFinite(n)) return '–';
+  const a = Math.abs(n);
+  if (a >= 1_000_000_000) return `${(n / 1_000_000_000).toFixed(1)}B`;
+  if (a >= 1_000_000) return `${(n / 1_000_000).toFixed(a >= 10_000_000 ? 1 : 2)}M`;
+  if (a >= 1) return Math.round(n).toLocaleString('en-US');
+  if (a === 0) return '0';
+  return n.toFixed(2);
+}
+
 export function formatMetric(value: number | undefined, m: MetricDef): string {
   if (value === undefined || value === null || !isFinite(value)) return '–';
   switch (m.format) {
@@ -27,15 +40,23 @@ export function formatMetric(value: number | undefined, m: MetricDef): string {
 }
 
 // ─── Color ramps ────────────────────────────────────────────────────
-// Sequential 5-step ramps. Hot = YlOrRd-ish (low burden -> high burden),
-// Cool = YlGn-ish reversed for "more is better", Neutral = blue.
+// Sequential 5-step ramps, one hue each, stepped in OKLCH so lightness rises
+// monotonically and every step clears 2:1 against its own surface. The
+// previous ramps were multi-hue and non-monotone — the top bucket rendered
+// *less* intense than the fourth, so the worst-hit districts read as milder
+// than their neighbours. Keep any edits monotone in L and inside one hue;
+// scripts in the dataviz skill validate this.
+//
+// Hot   = higher is worse (people affected)   — red
+// Cool  = higher is better (services present) — green
+// Neut  = neither (area, extent)              — blue
 
-const RAMP_HOT_DARK   = ['#1a2332', '#52443f', '#a06a3c', '#d9603a', '#b91c1c'];
-const RAMP_HOT_LIGHT  = ['#fee5d9', '#fcae91', '#fb6a4a', '#de2d26', '#a50f15'];
-const RAMP_COOL_DARK  = ['#3a1f2c', '#5b3650', '#3d6b5e', '#4a9c66', '#2bb673'];
-const RAMP_COOL_LIGHT = ['#edf8e9', '#bae4b3', '#74c476', '#31a354', '#006d2c'];
-const RAMP_NEUT_DARK  = ['#1a2332', '#1d4ed8', '#3b82f6', '#60a5fa', '#93c5fd'];
-const RAMP_NEUT_LIGHT = ['#eff3ff', '#bdd7e7', '#6baed6', '#3182bd', '#08519c'];
+const RAMP_HOT_DARK   = ['#6a3730', '#9a463d', '#cc5449', '#f76659', '#ff8f80'];
+const RAMP_HOT_LIGHT  = ['#daa198', '#d67b70', '#cc5449', '#bc2823', '#971b17'];
+const RAMP_COOL_DARK  = ['#295233', '#2f7442', '#369653', '#44b565', '#6fd087'];
+const RAMP_COOL_LIGHT = ['#8fbf98', '#66ab75', '#3b9555', '#007f35', '#006527'];
+const RAMP_NEUT_DARK  = ['#1c4b70', '#1868a0', '#1f86cd', '#47a3e9', '#7cbef6'];
+const RAMP_NEUT_LIGHT = ['#8cb6db', '#609fd2', '#2d86c8', '#006eb8', '#00559e'];
 
 export function getRamp(semantics: 'hot' | 'cool' | 'neutral', isDark: boolean): string[] {
   if (semantics === 'hot') return isDark ? RAMP_HOT_DARK : RAMP_HOT_LIGHT;
@@ -168,6 +189,54 @@ export function provinceAggregates(stats: StatsTable): StatsTable {
 export function statsForLevel(districtStats: StatsTable, level: 'admin0' | 'admin1' | 'admin2'): StatsTable {
   if (level === 'admin1') return provinceAggregates(districtStats);
   return districtStats;
+}
+
+// ─── Projection ──────────────────────────────────────────────────────
+// Scrubbing the timeline past the last observed year repaints the map with
+// projected values. The projection is national — the ETL fits one severity
+// curve per country — so districts are scaled by a single factor, holding
+// each district's share of national impact fixed. That assumption (the
+// geography of who gets hit stays put) is what the map is showing, and the
+// UI says so wherever a projected year is active.
+
+export function projectionFactor(timeline: Timeline | null, scrubYear: number): number {
+  if (!timeline) return 1;
+  const observed = timeline.observed.find(o => o.track === 'event');
+  if (!observed || observed.value <= 0 || scrubYear <= observed.year) return 1;
+  const p = timeline.projected.find(x => x.year === scrubYear);
+  if (!p) return 1;
+  return p.central / observed.value;
+}
+
+// Only population-derived fields scale. Land under water and facility counts
+// are observations of one flood; multiplying them by a population-risk
+// factor would assert something the model never estimated.
+const PROJECTED_FIELDS = [
+  'affected_pop_total', 'affected_pop_max', 'affected_pop_density',
+  'affected_child_pop_total', 'affected_child_pop_max',
+] as const;
+
+const projectionCache = new WeakMap<StatsTable, Map<number, StatsTable>>();
+
+export function projectStats(stats: StatsTable, factor: number): StatsTable {
+  if (!isFinite(factor) || Math.abs(factor - 1) < 1e-9) return stats;
+  let perTable = projectionCache.get(stats);
+  if (!perTable) { perTable = new Map(); projectionCache.set(stats, perTable); }
+  const hit = perTable.get(factor);
+  if (hit) return hit;
+
+  const out: StatsTable = {};
+  for (const [id, d] of Object.entries(stats)) {
+    const row = { ...d } as DistrictStats;
+    for (const k of PROJECTED_FIELDS) {
+      const v = d[k] as number | undefined;
+      if (typeof v === 'number') row[k] = v * factor;
+    }
+    withDerivedMetrics(row);
+    out[id] = row;
+  }
+  perTable.set(factor, out);
+  return out;
 }
 
 // ─── Impact tier (for layman labels) ─────────────────────────────────
