@@ -41,7 +41,10 @@ export default function TimeBar({ isDark }: { isDark: boolean }) {
   const [all, setAll] = useState<AllTimelines | null>(null);
   const [event, setEvent] = useState<EventFacts | null>(null);
   const [collapsed, setCollapsed] = useState(false);
-  const [mode, setMode] = useState<ChartMode>('season');
+  // Year-on-year is the landing view: it answers "is this getting worse?"
+  // without the reader choosing anything first. The monthly and comparison
+  // views are one click away.
+  const [mode, setMode] = useState<ChartMode>('trend');
 
   const year = years.find(y => y.id === app.year) ?? null;
 
@@ -126,9 +129,9 @@ export default function TimeBar({ isDark }: { isDark: boolean }) {
         {/* What the chart shows */}
         <div style={{ display: 'flex', gap: 3, flexShrink: 0, padding: 2, borderRadius: 9, border: `1px solid ${border}` }}>
           {([
-            { k: 'season' as ChartMode, label: 'Through the year', icon: CalendarRange },
-            { k: 'trend' as ChartMode, label: 'Year on year', icon: TrendingUp },
-            { k: 'damage' as ChartMode, label: 'Damage breakdown', icon: BarChart3 },
+            { k: 'season' as ChartMode, label: 'Monthly Series', icon: CalendarRange },
+            { k: 'trend' as ChartMode, label: 'Year Series', icon: TrendingUp },
+            { k: 'damage' as ChartMode, label: 'Comparison Chart', icon: BarChart3 },
           ]).map(o => {
             const on = mode === o.k;
             const Icon = o.icon;
