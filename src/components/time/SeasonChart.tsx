@@ -190,9 +190,17 @@ export default function SeasonChart({
           const head = `<div style="font-weight:700;margin-bottom:4px">${rows[0].name} ${yearId}</div>`;
           const body = rows
             .sort((a, b) => (b.value ?? 0) - (a.value ?? 0))
-            .map(p => `<div style="display:flex;justify-content:space-between;gap:16px">
-                 <span>${p.marker} ${p.seriesName}</span>
-                 <b>${formatInt(p.value as number)}</b></div>`)
+            .map(p => {
+              // A value sitting on the floor is the "nothing detected"
+              // sentinel — reporting it as "1,000 people" would be a
+              // fabricated measurement.
+              const atFloor = (p.value as number) <= floor;
+              const shown = atFloor
+                ? '<span style="opacity:.6">no flooding detected</span>'
+                : `<b>${formatInt(p.value as number)}</b>`;
+              return `<div style="display:flex;justify-content:space-between;gap:16px">
+                 <span>${p.marker} ${p.seriesName}</span>${shown}</div>`;
+            })
             .join('');
           return head + body;
         },
@@ -208,11 +216,16 @@ export default function SeasonChart({
       yAxis: {
         type: 'log',
         logBase: 10,
-        min: 1000,
+        // Bottom the axis on the reporting floor so unflooded months sit flat
+        // on the baseline rather than plunging off the bottom of the chart.
+        min: floor,
         axisLine: { show: false },
         axisTick: { show: false },
         splitLine: { lineStyle: { color: grid } },
-        axisLabel: { color: tm, fontSize: 9, formatter: (v: number) => tick(v) },
+        axisLabel: {
+          color: tm, fontSize: 9,
+          formatter: (v: number) => (v <= floor ? 'none' : tick(v)),
+        },
       },
       series,
     } as EChartsOption;
