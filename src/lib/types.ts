@@ -342,11 +342,32 @@ export interface CountryTimeline {
   series: Record<string, TimelinePoint[]>;
 }
 
+/** Month-by-month series within one year. `values` has 12 slots; null means
+ *  no meaningful flooding recorded that month, which is different from zero. */
+export interface MonthlyCountry {
+  code: string;
+  name: string;
+  values: (number | null)[];
+  /** Relative uncertainty shaded around the curve, e.g. 0.20 = ±20%. */
+  spread: number;
+}
+
+export interface MonthlyYear {
+  months: string[];
+  note: string;
+  /** True when the year was surveyed through a whole season, so drawing a
+   *  smooth curve between months is meaningful. False for a single observed
+   *  event, where interpolation would invent months nobody measured. */
+  continuous: boolean;
+  countries: MonthlyCountry[];
+}
+
 export interface AllTimelines {
   metrics: string[];
   labels: Record<string, string>;
   years: number[];
   countries: CountryTimeline[];
+  monthly: Record<string, MonthlyYear>;
 }
 
 /** Fixed hue per country, assigned in this order and never cycled or

@@ -287,6 +287,80 @@ def expected_annual_impact(observed: float, rp100: float) -> tuple[float, float]
     return ead, b
 
 
+# ─── Monthly 2025 exposure ───────────────────────────────────────────────
+# Month-by-month flood-exposed population through the 2025 monsoon, lifted
+# from the EarthPulse FloodLens page (flood-page/index.html, the `CO` object)
+# so the two products quote the same numbers. Values are people exposed in
+# that month, not a running total — a country can peak twice in a season, and
+# summing them would double-count anyone flooded in consecutive months.
+#
+# `null` means no meaningful flooding recorded that month (the source page
+# stores a 1e3 floor there purely so its log axis has something to draw).
+# `spread` is the relative uncertainty the source shades around each curve.
+MONTHLY_2025: dict[str, dict] = {
+    # code: [Jan … Dec] in people
+    "pak": {"values": [None, None, None, None, None, 4_900_000, 3_100_000,
+                       9_800_000, 2_700_000, 2_400_000, None, None], "spread": 0.20},
+    "ind": {"values": [None, None, None, None, None, 18_900_000, 34_700_000,
+                       32_400_000, 10_300_000, 16_900_000, None, None], "spread": 0.20},
+    "npl": {"values": [None, None, None, None, None, 400_000, 40_000,
+                       2_600_000, 100_000, 500_000, None, None], "spread": 0.25},
+    "bgd": {"values": [None, None, None, None, None, 7_100_000, 2_400_000,
+                       6_500_000, 3_700_000, 500_000, None, None], "spread": 0.20},
+    "btn": {"values": [None, None, None, None, None, 10_000, 1_000,
+                       70_000, 8_000, 8_000, None, None], "spread": 0.30},
+    "lka": {"values": [None, None, None, None, None, None, None,
+                       None, None, None, 300_000, 780_000], "spread": 0.25},
+}
+
+MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
+               "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+
+
+def build_monthly(events: dict[str, dict]) -> dict:
+    """Within-year monthly series for each year the portal covers.
+
+    2025 has a full monsoon season. 2026 is a single six-day event in July, so
+    its series is one spike and eleven empty months — drawn honestly rather
+    than interpolated into a season that was never observed.
+    """
+    years: dict[str, dict] = {}
+
+    years["2025"] = {
+        "months": MONTH_NAMES,
+        "note": ("People exposed during each month of the 2025 monsoon. "
+                 "Monthly figures are not additive — the same person can be "
+                 "flooded in consecutive months."),
+        "continuous": True,
+        "countries": [
+            {"code": code, "name": COUNTRIES[code][0],
+             "values": MONTHLY_2025[code]["values"],
+             "spread": MONTHLY_2025[code]["spread"]}
+            for code in COUNTRIES if code in MONTHLY_2025
+        ],
+    }
+
+    july = MONTH_NAMES.index("Jul")
+    years[EVENT_ID] = {
+        "months": MONTH_NAMES,
+        "note": (f"The {EVENT_ID} record is a single observed event "
+                 f"({EVENT_START} to {EVENT_END}), so only July carries a "
+                 "figure. The rest of the year was not surveyed."),
+        "continuous": False,
+        "countries": [
+            {
+                "code": code,
+                "name": ev["country_name"],
+                "values": [ev["totals"]["affected_pop_total"] if i == july else None
+                           for i in range(12)],
+                "spread": 0.15,
+            }
+            for code, ev in events.items()
+        ],
+    }
+    return years
+
+
 # Fields that exist in both the 2025 and the 2026 stats tables, so a series
 # can actually be drawn across the two. 'flood_extent_km2' is deliberately
 # absent — it is only measured for an observed event.
@@ -570,10 +644,12 @@ def write_all_country_timelines(events: dict[str, dict]) -> None:
             for code, ev in events.items()
         ],
     }
+    out["monthly"] = build_monthly(events)
     (WEB / "timelines.json").write_text(
         json.dumps(out, separators=(",", ":")), encoding="utf-8")
     print(f"[registry] timelines.json · {len(out['countries'])} countries × "
-          f"{len(TIMELINE_METRICS)} metrics")
+          f"{len(TIMELINE_METRICS)} metrics + monthly "
+          f"{'/'.join(out['monthly'].keys())}")
 
 
 def write_registry(events: dict[str, dict]) -> None:
