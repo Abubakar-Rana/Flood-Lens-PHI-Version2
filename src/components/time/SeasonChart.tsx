@@ -45,9 +45,15 @@ interface Props {
  * flatten four of the six onto the baseline. A second axis would be worse: two
  * arbitrary scales side by side invent relationships the data doesn't contain.
  *
- * Months with no recorded flooding are left as gaps rather than plotted as
- * zero. Zero on a log axis is undefined, but more importantly "not flooded"
- * and "not surveyed" are different claims, and neither is "zero people".
+ * Three different states share this axis and must not be conflated:
+ *   - a measured flood         → filled marker, full-weight line
+ *   - measured, nothing found  → the curve rides the reporting floor with no
+ *                                marker, so the year reads as one continuous
+ *                                line without implying "1,000 people flooded
+ *                                in January"
+ *   - never surveyed           → a gap in the line (2026 outside July)
+ * Zero is not an option on a log axis, which is exactly why the source data
+ * carries a floor rather than a zero.
  */
 export default function SeasonChart({
   monthly, yearId, activeCountry, onPickCountry, isDark,
@@ -63,6 +69,8 @@ export default function SeasonChart({
 
     const series: NonNullable<EChartsOption['series']> = [];
 
+    const floor = monthly.floor ?? 1000;
+
     for (const c of monthly.countries) {
       const color = countryColor(c.code, isDark);
       const on = c.code === activeCountry;
@@ -70,11 +78,14 @@ export default function SeasonChart({
       if (!hasData) continue;
 
       // Uncertainty band, drawn as a transparent lower bound plus a stacked
-      // ribbon on top of it. Only for a surveyed season — a single observed
-      // event has no month-to-month spread to shade.
+      // ribbon on top of it. Only around months that actually recorded a
+      // flood — shading a band around the reporting floor would imply a
+      // measurement precision that isn't there.
       if (monthly.continuous) {
-        const lower = c.values.map(v => (v == null ? null : v * (1 - c.spread)));
-        const width = c.values.map(v => (v == null ? null : v * 2 * c.spread));
+        const lower = c.values.map((v, i) =>
+          v == null || !c.detected[i] ? null : v * (1 - c.spread));
+        const width = c.values.map((v, i) =>
+          v == null || !c.detected[i] ? null : v * 2 * c.spread);
         series.push({
           name: `${c.name}__lo`, type: 'line', stack: `band-${c.code}`,
           data: lower, symbol: 'none', lineStyle: { opacity: 0 },
@@ -93,15 +104,21 @@ export default function SeasonChart({
       series.push({
         name: c.name,
         type: 'line',
-        data: c.values,
+        // Every month the year recorded, floor included, so the curve runs
+        // January to December instead of starting abruptly in June.
+        data: c.values.map((v, i) => ({
+          value: v,
+          // Only months with a real flood get a marker; the flat off-season
+          // stretch stays an unadorned line.
+          symbol: c.detected[i] ? 'circle' : 'none',
+          symbolSize: c.detected[i] ? (on ? 9 : 6) : 0,
+          itemStyle: { color, borderColor: surface, borderWidth: 2 },
+        })),
         // Monotone smoothing: it curves without overshooting into peaks that
         // were never recorded between two months.
         smooth: monthly.continuous ? 0.35 : false,
         smoothMonotone: 'x',
         connectNulls: false,
-        symbol: 'circle',
-        symbolSize: on ? 9 : 6,
-        showSymbol: true,
         lineStyle: { color, width: on ? 3.4 : 1.9, opacity: on ? 1 : 0.55 },
         itemStyle: { color, borderColor: surface, borderWidth: 2 },
         emphasis: { focus: 'series', lineStyle: { width: on ? 4 : 3 } },

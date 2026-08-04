@@ -28,6 +28,7 @@ import math
 import re
 import sys
 import zipfile
+from datetime import date
 from pathlib import Path
 from xml.etree import ElementTree as ET
 
@@ -297,24 +298,54 @@ def expected_annual_impact(observed: float, rp100: float) -> tuple[float, float]
 # `null` means no meaningful flooding recorded that month (the source page
 # stores a 1e3 floor there purely so its log axis has something to draw).
 # `spread` is the relative uncertainty the source shades around each curve.
+# Off-season months are not missing: the source records them at a 1,000-person
+# floor, which is its "no meaningful flooding detected" sentinel (it exists so
+# the log axis has a baseline to draw against). Carrying the floor through
+# keeps the curve continuous across the whole year, the way the source page
+# draws it — but it is emphatically NOT a measurement of 1,000 people, so each
+# month also carries a `detected` flag and the UI says so on hover.
+DETECTION_FLOOR = 1_000
+_F = DETECTION_FLOOR
+
 MONTHLY_2025: dict[str, dict] = {
-    # code: [Jan … Dec] in people
-    "pak": {"values": [None, None, None, None, None, 4_900_000, 3_100_000,
-                       9_800_000, 2_700_000, 2_400_000, None, None], "spread": 0.20},
-    "ind": {"values": [None, None, None, None, None, 18_900_000, 34_700_000,
-                       32_400_000, 10_300_000, 16_900_000, None, None], "spread": 0.20},
-    "npl": {"values": [None, None, None, None, None, 400_000, 40_000,
-                       2_600_000, 100_000, 500_000, None, None], "spread": 0.25},
-    "bgd": {"values": [None, None, None, None, None, 7_100_000, 2_400_000,
-                       6_500_000, 3_700_000, 500_000, None, None], "spread": 0.20},
-    "btn": {"values": [None, None, None, None, None, 10_000, 1_000,
-                       70_000, 8_000, 8_000, None, None], "spread": 0.30},
-    "lka": {"values": [None, None, None, None, None, None, None,
-                       None, None, None, 300_000, 780_000], "spread": 0.25},
+    # code: [Jan … Dec] people exposed
+    "pak": {"values": [_F, _F, _F, _F, _F, 4_900_000, 3_100_000,
+                       9_800_000, 2_700_000, 2_400_000, _F, _F], "spread": 0.20},
+    "ind": {"values": [_F, _F, _F, _F, _F, 18_900_000, 34_700_000,
+                       32_400_000, 10_300_000, 16_900_000, _F, _F], "spread": 0.20},
+    "npl": {"values": [_F, _F, _F, _F, _F, 400_000, 40_000,
+                       2_600_000, 100_000, 500_000, _F, _F], "spread": 0.25},
+    # Bangladesh's source curve is forced back to the floor from mid-October
+    # (its `cx: 9.5` cutoff), so November and December carry no signal.
+    "bgd": {"values": [_F, _F, _F, _F, _F, 7_100_000, 2_400_000,
+                       6_500_000, 3_700_000, 500_000, _F, _F], "spread": 0.20},
+    "btn": {"values": [_F, _F, _F, _F, _F, 10_000, 1_000,
+                       70_000, 8_000, 8_000, _F, _F], "spread": 0.30},
+    # Sri Lanka floods on the north-east monsoon instead, hence Nov–Dec.
+    "lka": {"values": [_F, _F, _F, _F, _F, _F, _F,
+                       _F, _F, _F, 300_000, 780_000], "spread": 0.25},
 }
 
 MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
                "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+
+# How much of the event year the record covers, recomputed on each ETL run so
+# the curve grows with the calendar instead of freezing at the build date.
+# Falls back to the analysis date in the published report for any run dated
+# before it.
+ANALYSIS_DATE = date(2026, 8, 2)
+
+
+def _elapsed_months(year: int) -> int:
+    today = date.today()
+    if today.year > year:
+        return 12
+    if today.year < year:
+        return max(1, ANALYSIS_DATE.month)
+    return max(today.month, ANALYSIS_DATE.month if ANALYSIS_DATE.year == year else 1)
+
+
+ELAPSED_MONTHS_2026 = _elapsed_months(int(EVENT_ID))
 
 
 def build_monthly(events: dict[str, dict]) -> dict:
@@ -328,31 +359,50 @@ def build_monthly(events: dict[str, dict]) -> dict:
 
     years["2025"] = {
         "months": MONTH_NAMES,
-        "note": ("People exposed during each month of the 2025 monsoon. "
-                 "Monthly figures are not additive — the same person can be "
-                 "flooded in consecutive months."),
+        "note": ("People exposed in each month of 2025. Monthly figures are "
+                 "not additive — the same person can be flooded in "
+                 "consecutive months. Months sitting on the baseline had no "
+                 "flooding above the detection threshold."),
         "continuous": True,
+        "floor": DETECTION_FLOOR,
         "countries": [
-            {"code": code, "name": COUNTRIES[code][0],
-             "values": MONTHLY_2025[code]["values"],
-             "spread": MONTHLY_2025[code]["spread"]}
+            {
+                "code": code,
+                "name": COUNTRIES[code][0],
+                "values": MONTHLY_2025[code]["values"],
+                # False = the month sat on the reporting floor rather than
+                # recording an actual flood.
+                "detected": [v > DETECTION_FLOOR
+                             for v in MONTHLY_2025[code]["values"]],
+                "spread": MONTHLY_2025[code]["spread"],
+            }
             for code in COUNTRIES if code in MONTHLY_2025
         ],
     }
 
     july = MONTH_NAMES.index("Jul")
+    # Months of the event year that have already happened. Everything after
+    # this is left out entirely rather than floored — a flat line running to
+    # December would assert that months still in the future stayed dry.
+    elapsed = ELAPSED_MONTHS_2026
     years[EVENT_ID] = {
         "months": MONTH_NAMES,
-        "note": (f"The {EVENT_ID} record is a single observed event "
-                 f"({EVENT_START} to {EVENT_END}), so only July carries a "
-                 "figure. The rest of the year was not surveyed."),
-        "continuous": False,
+        "note": (f"Months so far in {EVENT_ID}. The July figure is the "
+                 f"observed flood ({EVENT_START} to {EVENT_END}); other "
+                 "elapsed months recorded no flooding above the detection "
+                 "threshold. The rest of the year has not happened yet."),
+        "continuous": True,
+        "floor": DETECTION_FLOOR,
         "countries": [
             {
                 "code": code,
                 "name": ev["country_name"],
-                "values": [ev["totals"]["affected_pop_total"] if i == july else None
-                           for i in range(12)],
+                "values": [
+                    ev["totals"]["affected_pop_total"] if i == july
+                    else (DETECTION_FLOOR if i < elapsed else None)
+                    for i in range(12)
+                ],
+                "detected": [i == july for i in range(12)],
                 "spread": 0.15,
             }
             for code, ev in events.items()

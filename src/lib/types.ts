@@ -347,7 +347,12 @@ export interface CountryTimeline {
 export interface MonthlyCountry {
   code: string;
   name: string;
+  /** 12 slots. A value equal to the year's `floor` means "no flooding above
+   *  the detection threshold", not a measurement of that many people. null
+   *  means the month was never surveyed. */
   values: (number | null)[];
+  /** Per month: true where an actual flood was recorded. */
+  detected: boolean[];
   /** Relative uncertainty shaded around the curve, e.g. 0.20 = ±20%. */
   spread: number;
 }
@@ -359,6 +364,8 @@ export interface MonthlyYear {
    *  smooth curve between months is meaningful. False for a single observed
    *  event, where interpolation would invent months nobody measured. */
   continuous: boolean;
+  /** Reporting floor — the baseline an unflooded month sits on. */
+  floor: number;
   countries: MonthlyCountry[];
 }
 
