@@ -9,7 +9,7 @@ import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recha
 import { useApp, LATEST_OBSERVED_YEAR } from '@/lib/state';
 import { loadCountries, loadEvent, loadStats, loadTimeline, loadYears } from '@/lib/data';
 import {
-  LENS_BY_KEY, lensesForKind, METRIC_BY_KEY,
+  LENS_BY_KEY, lensColor, lensesForKind, METRIC_BY_KEY,
   type CountryInfo, type EventFacts,
   type StatsTable, type Timeline, type YearDef,
 } from '@/lib/types';
@@ -139,6 +139,7 @@ export default function StatsPanel() {
     [region, tierBreaks]);
 
   const activeLens = app.lens ? LENS_BY_KEY[app.lens] : null;
+  const accent = activeLens ? lensColor(activeLens, isDark) : '#c8a951';
   const md = METRIC_BY_KEY[app.metric];
   const headlineValue = valueFor(app.metric);
   const isProjected = app.scrubYear > LATEST_OBSERVED_YEAR;
@@ -206,15 +207,15 @@ export default function StatsPanel() {
             {/* ── The one number this view is about ─────────────────── */}
             <div style={{
               padding: '14px 14px 12px', borderRadius: 12, marginBottom: 12,
-              background: activeLens ? `${activeLens.color}12` : cardBg,
-              border: `1px solid ${activeLens ? `${activeLens.color}45` : border}`,
+              background: activeLens ? `${accent}12` : cardBg,
+              border: `1px solid ${activeLens ? `${accent}45` : border}`,
             }}>
-              <div style={{ color: activeLens?.color ?? tm, fontSize: 9.5, fontWeight: 700, letterSpacing: '0.06em' }}>
+              <div style={{ color: activeLens ? accent : tm, fontSize: 9.5, fontWeight: 700, letterSpacing: '0.06em' }}>
                 {(activeLens?.label ?? md.short).toUpperCase()}
                 {isProjected && ' · PROJECTED'}
               </div>
               <div style={{
-                color: activeLens?.color ?? '#c8a951',
+                color: accent,
                 fontSize: 40, fontWeight: 800, lineHeight: 1.02, marginTop: 4,
                 letterSpacing: '-0.03em', fontVariantNumeric: 'tabular-nums',
               }}>
@@ -229,7 +230,7 @@ export default function StatsPanel() {
                   <div style={{ height: 5, borderRadius: 3, background: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)', overflow: 'hidden' }}>
                     <div style={{
                       width: `${Math.min(100, shareOfCountry)}%`, height: '100%',
-                      background: activeLens?.color ?? '#c8a951', borderRadius: 3,
+                      background: accent, borderRadius: 3,
                       transition: 'width .5s ease',
                     }} />
                   </div>
@@ -246,7 +247,7 @@ export default function StatsPanel() {
               {lenses.map(l => (
                 <BigTile
                   key={l.key}
-                  color={l.color}
+                  color={lensColor(l, isDark)}
                   icon={l.key === 'children' ? Baby : l.key === 'water' ? Waves
                     : l.key === 'hospitals' ? Hospital : l.key === 'schools' ? GraduationCap : Users}
                   label={l.label}
@@ -311,7 +312,7 @@ export default function StatsPanel() {
                           </span>
                         </div>
                         <div style={{ height: 3, borderRadius: 2, marginTop: 4, background: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.07)' }}>
-                          <div style={{ width: `${Math.max(2, (value / max) * 100)}%`, height: '100%', borderRadius: 2, background: activeLens?.color ?? '#c8a951' }} />
+                          <div style={{ width: `${Math.max(2, (value / max) * 100)}%`, height: '100%', borderRadius: 2, background: accent }} />
                         </div>
                       </button>
                     );

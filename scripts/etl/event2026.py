@@ -536,6 +536,7 @@ def process(code: str, facts: dict[str, dict]) -> dict:
     timeline = build_timeline(code, totals_2025, totals_2026, rp100, f)
     (cdir / "timeline.json").write_text(
         json.dumps(timeline, separators=(",", ":")), encoding="utf-8")
+    event["timeline"] = timeline
 
     print(f"[{code}] extent {measured_extent:,.0f} km² "
           f"(published {f.get('extent_km2'):,.0f}) · "
@@ -543,6 +544,36 @@ def process(code: str, facts: dict[str, dict]) -> dict:
           f"health {len(health_hits)} · schools {len(school_hits)} · "
           f"overlay {overlay['width']}x{overlay['height']}")
     return event
+
+
+def write_all_country_timelines(events: dict[str, dict]) -> None:
+    """One small file holding every country's series for every metric.
+
+    The cross-country chart needs all six at once. Six separate fetches would
+    work — they are cached — but this is a couple of KB and turns the chart's
+    cold start into a single request, so switching country never re-fetches
+    anything the chart already has.
+    """
+    out = {
+        "metrics": [k for k, _ in TIMELINE_METRICS],
+        "labels": {k: label for k, label in TIMELINE_METRICS},
+        "years": [2025, 2026, 2027],
+        "countries": [
+            {
+                "code": code,
+                "name": ev["country_name"],
+                "series": {
+                    key: ev["timeline"]["metrics"][key]["points"]
+                    for key, _ in TIMELINE_METRICS
+                },
+            }
+            for code, ev in events.items()
+        ],
+    }
+    (WEB / "timelines.json").write_text(
+        json.dumps(out, separators=(",", ":")), encoding="utf-8")
+    print(f"[registry] timelines.json · {len(out['countries'])} countries × "
+          f"{len(TIMELINE_METRICS)} metrics")
 
 
 def write_registry(events: dict[str, dict]) -> None:
@@ -588,6 +619,7 @@ def main(only: str | None = None) -> None:
             continue
         events[code] = process(code, facts)
     if not only:
+        write_all_country_timelines(events)
         write_registry(events)
 
 

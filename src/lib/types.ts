@@ -296,7 +296,13 @@ export interface LensDef {
   metric: MetricKey;
   /** Field read for the headline tile; usually the same as `metric`. */
   totalKey: keyof CountryTotals | 'flood_extent_km2';
-  color: string;
+  /** Per-mode hue. Both sets are validated for colour-vision separation and
+   *  for lightness against their own surface — see scripts/validate_palette.js
+   *  in the dataviz skill. Re-run it if you change one. A lens keeps its hue
+   *  everywhere it appears (tile, legend, chart line, map ramp accent) so the
+   *  colour identifies the measure, never its rank. */
+  color: string;        // light mode
+  colorDark: string;    // dark mode
   points?: PointLayer;
   /** Omitted = available in every year. */
   kinds?: YearKind[];
@@ -304,17 +310,63 @@ export interface LensDef {
 
 export const LENSES: LensDef[] = [
   { key: 'people', label: 'People', question: 'How many people are affected?',
-    metric: 'affected_pop_total', totalKey: 'affected_pop_total', color: '#ef4444' },
+    metric: 'affected_pop_total', totalKey: 'affected_pop_total',
+    color: '#e11d48', colorDark: '#cc2443' },
   { key: 'children', label: 'Children', question: 'How many are children?',
-    metric: 'affected_child_pop_total', totalKey: 'affected_child_pop_total', color: '#f59e0b' },
+    metric: 'affected_child_pop_total', totalKey: 'affected_child_pop_total',
+    color: '#ea9010', colorDark: '#c8830b' },
   { key: 'water', label: 'Land flooded', question: 'How much land went under water?',
-    metric: 'flood_extent_km2', totalKey: 'flood_extent_km2', color: '#38bdf8',
-    kinds: ['event'] },
+    metric: 'flood_extent_km2', totalKey: 'flood_extent_km2',
+    color: '#0284c7', colorDark: '#38bdf8', kinds: ['event'] },
   { key: 'hospitals', label: 'Hospitals', question: 'Which hospitals are hit?',
-    metric: 'health_count', totalKey: 'health_count', color: '#22c55e', points: 'health' },
+    metric: 'health_count', totalKey: 'health_count',
+    color: '#0d9488', colorDark: '#009892', points: 'health' },
   { key: 'schools', label: 'Schools', question: 'Which schools are hit?',
-    metric: 'school_count', totalKey: 'school_count', color: '#3b82f6', points: 'schools' },
+    metric: 'school_count', totalKey: 'school_count',
+    color: '#4f46e5', colorDark: '#504fc6', points: 'schools' },
 ];
+
+export function lensColor(l: LensDef, isDark: boolean): string {
+  return isDark ? l.colorDark : l.color;
+}
+
+/** The four measures recorded in both 2025 and 2026, in chart order. */
+export const TREND_LENSES: LensKey[] = ['people', 'children', 'hospitals', 'schools'];
+
+// ─── Cross-country timelines (timelines.json) ────────────────────────────
+// Every country's series for every comparable metric, in one small file.
+
+export interface CountryTimeline {
+  code: string;
+  name: string;
+  series: Record<string, TimelinePoint[]>;
+}
+
+export interface AllTimelines {
+  metrics: string[];
+  labels: Record<string, string>;
+  years: number[];
+  countries: CountryTimeline[];
+}
+
+/** Fixed hue per country, assigned in this order and never cycled or
+ *  reassigned by rank — a country keeps its colour when the chart is filtered
+ *  or re-sorted. Both sets pass the six colour checks against their own
+ *  surface; re-run scripts/validate_palette.js if you change one. */
+export const COUNTRY_COLORS: Record<string, { light: string; dark: string }> = {
+  pak: { light: '#cc2443', dark: '#d3384e' },
+  ind: { light: '#d78c00', dark: '#c8830b' },
+  bgd: { light: '#00977c', dark: '#009d82' },
+  npl: { light: '#3b51bc', dark: '#455dc9' },
+  btn: { light: '#d879d0', dark: '#c66ebf' },
+  lka: { light: '#006893', dark: '#006d93' },
+};
+
+export function countryColor(code: string, isDark: boolean): string {
+  const c = COUNTRY_COLORS[code];
+  if (!c) return isDark ? '#8a8a8a' : '#6b6b6b';
+  return isDark ? c.dark : c.light;
+}
 
 export const LENS_BY_KEY: Record<LensKey, LensDef> =
   LENSES.reduce((a, l) => { a[l.key] = l; return a; }, {} as Record<LensKey, LensDef>);

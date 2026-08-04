@@ -4,7 +4,8 @@ import type { FeatureCollection } from 'geojson';
 import { feature as topoFeature } from 'topojson-client';
 import type { Topology, GeometryCollection } from 'topojson-specification';
 import type {
-  CountriesIndex, CountryInfo, EventFacts, StatsTable, Timeline, YearDef, YearRegistry,
+  AllTimelines, CountriesIndex, CountryInfo, EventFacts, StatsTable,
+  Timeline, YearDef, YearRegistry,
 } from './types';
 import { augmentStats } from './utils';
 
@@ -53,6 +54,11 @@ export async function loadEvent(countryCode: string, year: YearDef): Promise<Eve
 
 export async function loadTimeline(countryCode: string): Promise<Timeline> {
   return fetchJson<Timeline>(`/web-data/${countryCode}/timeline.json`);
+}
+
+/** Every country's comparable series, in one request. */
+export async function loadAllTimelines(): Promise<AllTimelines> {
+  return fetchJson<AllTimelines>('/web-data/timelines.json');
 }
 
 export async function loadBoundary(countryCode: string, level: 0 | 1 | 2): Promise<FeatureCollection> {

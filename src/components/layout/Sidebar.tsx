@@ -8,7 +8,7 @@ import {
 import { useApp } from '@/lib/state';
 import { loadCountries, loadStats, loadYears } from '@/lib/data';
 import {
-  lensesForKind, METRICS, METRIC_BY_KEY, PRESETS,
+  lensColor, lensesForKind, METRICS, METRIC_BY_KEY, PRESETS,
   type AdminLevel, type CountriesIndex, type MetricKey, type StatsTable, type YearDef,
 } from '@/lib/types';
 import { distinctAmenities, distinctProvinces, formatMetric, metricValues, presetRange } from '@/lib/utils';
@@ -137,6 +137,7 @@ export default function Sidebar() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
           {lenses.map(lens => {
             const active = app.lens === lens.key;
+            const lc = lensColor(lens, isDark);
             return (
               <button
                 key={lens.key}
@@ -144,16 +145,16 @@ export default function Sidebar() {
                 style={{
                   display: 'flex', alignItems: 'center', gap: 9, width: '100%',
                   textAlign: 'left', padding: '9px 10px', borderRadius: 9, cursor: 'pointer',
-                  background: active ? `${lens.color}1a` : cardBg,
-                  border: `1px solid ${active ? lens.color : border}`,
-                  color: active ? lens.color : ts,
+                  background: active ? `${lc}1a` : cardBg,
+                  border: `1px solid ${active ? lc : border}`,
+                  color: active ? lc : ts,
                   fontSize: 12, fontWeight: active ? 700 : 500,
                 }}
               >
                 <span style={{
                   width: 9, height: 9, borderRadius: '50%', flexShrink: 0,
-                  background: active ? lens.color : 'transparent',
-                  border: `2px solid ${active ? lens.color : tm}`,
+                  background: active ? lc : 'transparent',
+                  border: `2px solid ${active ? lc : tm}`,
                 }} />
                 {lens.question}
               </button>
