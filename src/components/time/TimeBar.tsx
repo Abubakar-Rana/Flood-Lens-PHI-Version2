@@ -83,7 +83,7 @@ export default function TimeBar({ isDark }: { isDark: boolean }) {
         + 'Compare bars within a panel; compare shapes across panels. Hollow bar = 2027 projected.');
     }
     return monthly?.note ?? '';
-  }, [mode, monthly, country]);
+  }, [mode, monthly]);
 
   return (
     <div style={{
