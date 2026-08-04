@@ -2,10 +2,10 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import dynamic from 'next/dynamic';
-import { ArrowLeft, CalendarRange, ChevronDown, Radio, TrendingUp, Waves } from 'lucide-react';
+import { ArrowLeft, BarChart3, CalendarRange, ChevronDown, Radio, TrendingUp, Waves } from 'lucide-react';
 import { useApp } from '@/lib/state';
 import { loadAllTimelines, loadCountries, loadEvent, loadYears } from '@/lib/data';
-import type { AllTimelines, CountryInfo, EventFacts, YearDef } from '@/lib/types';
+import type { AllTimelines, CountryInfo, EventFacts, MetricKey, YearDef } from '@/lib/types';
 
 // Charting is client-only and the heaviest thing on the page — keep it out of
 // the first paint so the map and numbers arrive first.
@@ -14,6 +14,10 @@ const SeasonChart = dynamic(() => import('./SeasonChart'), {
   loading: () => <ChartSkeleton />,
 });
 const TrendChart = dynamic(() => import('./TrendChart'), {
+  ssr: false,
+  loading: () => <ChartSkeleton />,
+});
+const DamageBars = dynamic(() => import('./DamageBars'), {
   ssr: false,
   loading: () => <ChartSkeleton />,
 });
@@ -28,7 +32,7 @@ function ChartSkeleton() {
   );
 }
 
-type ChartMode = 'season' | 'trend';
+type ChartMode = 'season' | 'trend' | 'damage';
 
 export default function TimeBar({ isDark }: { isDark: boolean }) {
   const app = useApp();
@@ -73,8 +77,13 @@ export default function TimeBar({ isDark }: { isDark: boolean }) {
     if (mode === 'trend') {
       return 'Year on year, all six countries. Dotted = 2027 projected.';
     }
+    if (mode === 'damage') {
+      return ('Each panel has its own scale — people run to millions while hospitals '
+        + 'run to hundreds, so one shared axis would flatten three of the four to nothing. '
+        + 'Compare bars within a panel; compare shapes across panels. Hollow bar = 2027 projected.');
+    }
     return monthly?.note ?? '';
-  }, [mode, monthly]);
+  }, [mode, monthly, country]);
 
   return (
     <div style={{
@@ -119,6 +128,7 @@ export default function TimeBar({ isDark }: { isDark: boolean }) {
           {([
             { k: 'season' as ChartMode, label: 'Through the year', icon: CalendarRange },
             { k: 'trend' as ChartMode, label: 'Year on year', icon: TrendingUp },
+            { k: 'damage' as ChartMode, label: 'Damage breakdown', icon: BarChart3 },
           ]).map(o => {
             const on = mode === o.k;
             const Icon = o.icon;
@@ -203,9 +213,9 @@ export default function TimeBar({ isDark }: { isDark: boolean }) {
         <div style={{ padding: '6px 14px 10px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2, flexWrap: 'wrap' }}>
             <span style={{ color: tp, fontSize: 10.5, fontWeight: 800, letterSpacing: '0.05em' }}>
-              {mode === 'season'
-                ? `PEOPLE EXPOSED THROUGH ${app.year} — ALL COUNTRIES`
-                : 'YEAR ON YEAR — ALL COUNTRIES'}
+              {mode === 'season' && `PEOPLE EXPOSED THROUGH ${app.year} — ALL COUNTRIES`}
+              {mode === 'trend' && 'YEAR ON YEAR — ALL COUNTRIES'}
+              {mode === 'damage' && `DAMAGE BREAKDOWN — ${(country?.name ?? '').toUpperCase()}`}
             </span>
             <span style={{
               display: 'inline-flex', alignItems: 'center', gap: 3,
@@ -215,12 +225,14 @@ export default function TimeBar({ isDark }: { isDark: boolean }) {
               <Radio size={9} className="pulse-dot" /> LIVE
             </span>
             <span style={{ color: tm, fontSize: 9, marginLeft: 'auto' }}>
-              compressed (log) scale · click a country to load it
+              {mode === 'damage'
+                ? 'click a panel to colour the map by it'
+                : 'compressed (log) scale · click a country to load it'}
             </span>
           </div>
 
           <div style={{ width: '100%', height: 196 }}>
-            {mode === 'season' ? (
+            {mode === 'season' && (
               <SeasonChart
                 monthly={monthly}
                 yearId={app.year}
@@ -228,7 +240,8 @@ export default function TimeBar({ isDark }: { isDark: boolean }) {
                 onPickCountry={app.setCountry}
                 isDark={isDark}
               />
-            ) : (
+            )}
+            {mode === 'trend' && (
               <TrendChart
                 all={all}
                 metricKey={app.metric}
@@ -236,6 +249,16 @@ export default function TimeBar({ isDark }: { isDark: boolean }) {
                 scrubYear={app.scrubYear}
                 onScrub={app.setScrubYear}
                 onPickCountry={app.setCountry}
+                isDark={isDark}
+              />
+            )}
+            {mode === 'damage' && (
+              <DamageBars
+                all={all}
+                countryCode={app.countryCode}
+                countryName={country?.name ?? ''}
+                activeMetric={app.metric}
+                onPickMetric={m => app.setMetric(m as MetricKey)}
                 isDark={isDark}
               />
             )}
