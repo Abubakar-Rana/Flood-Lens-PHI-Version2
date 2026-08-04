@@ -268,6 +268,20 @@ export default function TimeBar({ isDark }: { isDark: boolean }) {
           </div>
 
           <div style={{ color: tm, fontSize: 9, marginTop: 3, lineHeight: 1.5 }}>
+            {mode === 'season' && monthly?.pendingMonth != null && (
+              <span style={{
+                display: 'inline-flex', alignItems: 'center', gap: 5, marginRight: 8,
+                padding: '1px 8px', borderRadius: 20, fontWeight: 700,
+                background: isDark ? 'rgba(200,169,81,0.16)' : 'rgba(200,169,81,0.18)',
+                color: isDark ? '#c8a951' : '#7a5c0f',
+              }}>
+                <span className="pending-dot" style={{
+                  width: 6, height: 6, borderRadius: '50%',
+                  background: isDark ? '#c8a951' : '#7a5c0f',
+                }} />
+                {monthly.months[monthly.pendingMonth]} projected — satellite run still processing
+              </span>
+            )}
             {caption}
             {mode === 'season' && event && year?.kind === 'event' && (
               <> · {event.measured.districts_flooded} of {event.measured.districts_total} districts
@@ -280,6 +294,13 @@ export default function TimeBar({ isDark }: { isDark: boolean }) {
       <style>{`
         .pulse-dot { animation: pulse-fade 1.8s ease-in-out infinite; }
         @keyframes pulse-fade { 0%,100% { opacity: 1; } 50% { opacity: 0.25; } }
+        /* Mirrors the ripple ECharts draws on the pending month, so the badge
+           and the marker read as the same signal. */
+        .pending-dot { animation: pending-pulse 2.6s ease-in-out infinite; }
+        @keyframes pending-pulse {
+          0%,100% { opacity: 1;   transform: scale(1); }
+          50%     { opacity: .3;  transform: scale(1.35); }
+        }
         @keyframes tb-shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
         .back-to-country { animation: back-pop .28s ease-out; }
         @keyframes back-pop {
@@ -288,7 +309,7 @@ export default function TimeBar({ isDark }: { isDark: boolean }) {
         }
         .back-to-country:hover { filter: brightness(1.08); }
         @media (prefers-reduced-motion: reduce) {
-          .pulse-dot, .back-to-country { animation: none; }
+          .pulse-dot, .back-to-country, .pending-dot { animation: none; }
         }
       `}</style>
     </div>

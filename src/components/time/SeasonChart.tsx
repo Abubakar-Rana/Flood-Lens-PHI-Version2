@@ -3,7 +3,7 @@
 import { useMemo } from 'react';
 import ReactECharts from 'echarts-for-react/lib/core';
 import * as echarts from 'echarts/core';
-import { LineChart } from 'echarts/charts';
+import { EffectScatterChart, LineChart } from 'echarts/charts';
 import {
   GridComponent, LegendComponent, MarkAreaComponent,
   TitleComponent, TooltipComponent,
@@ -16,8 +16,8 @@ import { formatInt } from '@/lib/utils';
 // Register only what this chart draws — the full echarts bundle is several
 // times larger and none of the rest is used anywhere in the app.
 echarts.use([
-  LineChart, GridComponent, LegendComponent, MarkAreaComponent,
-  TitleComponent, TooltipComponent, CanvasRenderer,
+  LineChart, EffectScatterChart, GridComponent, LegendComponent,
+  MarkAreaComponent, TitleComponent, TooltipComponent, CanvasRenderer,
 ]);
 
 /** Y-axis tick form: short enough for a narrow gutter. */
@@ -101,13 +101,15 @@ export default function SeasonChart({
         });
       }
 
+      const projFrom = c.projected?.findIndex(Boolean) ?? -1;
+
+      // Measured leg. Runs to the last settled month; where a projection
+      // follows, it stops one month early so the dashed leg can pick up.
       series.push({
         name: c.name,
         type: 'line',
-        // Every month the year recorded, floor included, so the curve runs
-        // January to December instead of starting abruptly in June.
         data: c.values.map((v, i) => ({
-          value: v,
+          value: projFrom >= 0 && i > projFrom - 1 ? null : v,
           // Only months with a real flood get a marker; the flat off-season
           // stretch stays an unadorned line.
           symbol: c.detected[i] ? 'circle' : 'none',
@@ -127,6 +129,42 @@ export default function SeasonChart({
         animationEasing: 'cubicOut',
         animationDelay: (i: number) => i * 55,
       });
+
+      if (projFrom > 0) {
+        // Projected leg — dashed, sharing the last measured point so the
+        // curve stays joined while the change in status is unmistakable.
+        series.push({
+          name: `${c.name}__proj`,
+          type: 'line',
+          data: c.values.map((v, i) =>
+            i >= projFrom - 1 && c.values[i] != null ? v : null),
+          smooth: 0.35, smoothMonotone: 'x', connectNulls: false,
+          symbol: 'none',
+          lineStyle: {
+            color, width: on ? 3.2 : 1.8,
+            opacity: on ? 0.95 : 0.5, type: 'dashed',
+          },
+          z: on ? 11 : 5,
+          legendHoverLink: false, silent: true,
+          animationDuration: 900, animationDelay: 500,
+        });
+
+        // The pulsing marker. ECharts' ripple is doing the work the user sees
+        // as "still computing" — it is attached only to months whose satellite
+        // run has not landed, never to an observation.
+        series.push({
+          name: `${c.name}__pending`,
+          type: 'effectScatter',
+          // [category, value] so the marker lands on the right month.
+          data: [[monthly.months[projFrom], c.values[projFrom] as number]],
+          symbolSize: on ? 11 : 8,
+          showEffectOn: 'render',
+          rippleEffect: { period: 2.6, scale: 3.6, brushType: 'stroke' },
+          itemStyle: { color, borderColor: surface, borderWidth: 2 },
+          z: on ? 20 : 14,
+          legendHoverLink: false, silent: true,
+        });
+      }
     }
 
     // Shade the months that actually carry observations.
@@ -183,11 +221,24 @@ export default function SeasonChart({
         extraCssText: 'border-radius:8px;box-shadow:0 6px 22px rgba(0,0,0,.18);',
         axisPointer: { type: 'line', lineStyle: { color: tm, opacity: 0.45 } },
         formatter: (params: unknown) => {
-          const rows = (params as Array<{
+          const arr = params as Array<{
             seriesName: string; value: number | null; marker: string; name: string;
-          }>).filter(p => !p.seriesName.includes('__') && p.value != null);
+          }>;
+          // Keep one row per country: the measured leg, the dashed leg and
+          // the pulsing marker all report the same point.
+          const seen = new Set<string>();
+          const rows = arr.filter(p => {
+            const base = p.seriesName.replace(/__(proj|pending)$/, '');
+            if (p.value == null || seen.has(base)) return false;
+            seen.add(base);
+            return true;
+          }).map(p => ({ ...p, seriesName: p.seriesName.replace(/__(proj|pending)$/, '') }));
           if (rows.length === 0) return '';
-          const head = `<div style="font-weight:700;margin-bottom:4px">${rows[0].name} ${yearId}</div>`;
+          const monthIdx = monthly.months.indexOf(arr[0]?.name);
+          const pending = monthly.pendingMonth != null && monthIdx === monthly.pendingMonth;
+          const head = `<div style="font-weight:700;margin-bottom:4px">${rows[0].name} ${yearId}${
+            pending ? ' <span style="opacity:.65;font-weight:500">· projected, run in progress</span>' : ''
+          }</div>`;
           const body = rows
             .sort((a, b) => (b.value ?? 0) - (a.value ?? 0))
             .map(p => {

@@ -353,6 +353,9 @@ export interface MonthlyCountry {
   values: (number | null)[];
   /** Per month: true where an actual flood was recorded. */
   detected: boolean[];
+  /** Per month: true where the figure is modelled rather than observed —
+   *  a month whose satellite run has not finished yet. */
+  projected: boolean[];
   /** Relative uncertainty shaded around the curve, e.g. 0.20 = ±20%. */
   spread: number;
 }
@@ -366,6 +369,9 @@ export interface MonthlyYear {
   continuous: boolean;
   /** Reporting floor — the baseline an unflooded month sits on. */
   floor: number;
+  /** Month index whose satellite run is still processing, so its figure is a
+   *  projection. Null when every month in the year is settled. */
+  pendingMonth: number | null;
   countries: MonthlyCountry[];
 }
 

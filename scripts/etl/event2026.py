@@ -381,33 +381,67 @@ def build_monthly(events: dict[str, dict]) -> dict:
     }
 
     july = MONTH_NAMES.index("Jul")
+    august = MONTH_NAMES.index("Aug")
     # Months of the event year that have already happened. Everything after
     # this is left out entirely rather than floored — a flat line running to
     # December would assert that months still in the future stayed dry.
     elapsed = ELAPSED_MONTHS_2026
+
+    def august_projection(code: str, july_2026: float) -> float:
+        """Expected August 2026 exposure, pending the actual August run.
+
+        Scaled off the country's own 2025 seasonal shape: whatever multiple of
+        July that country saw in August 2025, applied to its observed July
+        2026 figure. The multiple is clamped to [0.2, 5] because a single
+        anomalously quiet July in the 2025 record (Nepal's was 40k against a
+        2.6M August) otherwise produces a 65x ratio and a nonsense projection.
+        """
+        m = MONTHLY_2025.get(code)
+        if not m or july_2026 <= 0:
+            return max(july_2026, DETECTION_FLOOR)
+        jul_25 = m["values"][july] or DETECTION_FLOOR
+        aug_25 = m["values"][august] or DETECTION_FLOOR
+        ratio = min(5.0, max(0.2, aug_25 / jul_25)) if jul_25 > 0 else 1.0
+        return max(july_2026 * ratio, DETECTION_FLOOR)
+
     years[EVENT_ID] = {
         "months": MONTH_NAMES,
-        "note": (f"Months so far in {EVENT_ID}. The July figure is the "
-                 f"observed flood ({EVENT_START} to {EVENT_END}); other "
-                 "elapsed months recorded no flooding above the detection "
-                 "threshold. The rest of the year has not happened yet."),
+        "note": (f"Months so far in {EVENT_ID}. July is the observed flood "
+                 f"({EVENT_START} to {EVENT_END}); earlier months recorded no "
+                 "flooding above the detection threshold. August is a "
+                 "projection from each country's 2025 seasonal shape while "
+                 "its satellite run is still processing. The rest of the year "
+                 "has not happened yet."),
         "continuous": True,
         "floor": DETECTION_FLOOR,
+        "pendingMonth": august,
         "countries": [
             {
                 "code": code,
                 "name": ev["country_name"],
                 "values": [
                     ev["totals"]["affected_pop_total"] if i == july
+                    else august_projection(code, ev["totals"]["affected_pop_total"])
+                    if i == august
                     else (DETECTION_FLOOR if i < elapsed else None)
                     for i in range(12)
                 ],
                 "detected": [i == july for i in range(12)],
+                # August is modelled, not measured — the UI draws it dashed
+                # with a pulsing marker so it can never be read as an
+                # observation.
+                "projected": [i == august for i in range(12)],
                 "spread": 0.15,
             }
             for code, ev in events.items()
         ],
     }
+
+    # 2025 is fully observed — nothing projected in it.
+    for c in years["2025"]["countries"]:
+        c["projected"] = [False] * 12
+    years["2025"]["pendingMonth"] = None
+
     return years
 
 
