@@ -24,7 +24,7 @@ export default function MapOverlay({ isDark }: { isDark: boolean }) {
       {/* A projected year is a different claim from an observed one. Say so on
           the map itself, not only in the chart legend. */}
       {projected && (
-        <div className="absolute left-1/2 z-[1000]" style={{ top: 178, transform: 'translateX(-50%)' }}>
+        <div className="absolute left-1/2 z-[1000]" style={{ top: 12, transform: 'translateX(-50%)' }}>
           <div style={{
             display: 'flex', alignItems: 'center', gap: 7, padding: '6px 14px',
             borderRadius: 20, background: 'rgba(200,169,81,0.16)',

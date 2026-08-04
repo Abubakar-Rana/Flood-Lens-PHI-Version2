@@ -287,32 +287,73 @@ def expected_annual_impact(observed: float, rp100: float) -> tuple[float, float]
     return ead, b
 
 
-def build_timeline(code: str, baseline_2025: float, observed: float,
-                   rp100: float, extra: dict) -> dict:
-    """Observed points plus a projected risk-outlook band for the trend chart."""
-    g = EXPOSURE_GROWTH.get(code, 0.01)
-    ead, exponent = expected_annual_impact(observed, rp100)
+# Fields that exist in both the 2025 and the 2026 stats tables, so a series
+# can actually be drawn across the two. 'flood_extent_km2' is deliberately
+# absent — it is only measured for an observed event.
+TIMELINE_METRICS = [
+    ("affected_pop_total", "People affected"),
+    ("affected_child_pop_total", "Children affected"),
+    ("health_count", "Health facilities affected"),
+    ("school_count", "Schools affected"),
+]
 
-    projected = []
-    for i in range(1, PROJECTION_YEARS + 1):
-        year = 2026 + i
-        projected.append({
-            "year": year,
-            "central": ead * (1 + g) ** i,
-            "low": ead * (1 + g * 0.5) ** i,
-            "high": ead * (1 + g * 2.0) ** i,
-        })
+
+def project_next_year(v2025: float, v2026: float, growth: float) -> float:
+    """Expected value for the next year, given two very different observed ones.
+
+    A straight-line fit through two points is useless here: nationally the 2025
+    and 2026 totals differ by 5x (Bangladesh) to 269x (Nepal), so a linear
+    extrapolation of that slope either collapses to zero or explodes. Floods are
+    multiplicative and heavy-tailed, so the central estimate is the geometric
+    mean of the observed years — a typical year sitting between a severe one and
+    a mild one — nudged by the assumed growth in exposed population.
+    """
+    if v2025 <= 0 and v2026 <= 0:
+        return 0.0
+    if v2025 <= 0:
+        return v2026 * (1 + growth)
+    if v2026 <= 0:
+        return v2025 * (1 + growth)
+    return math.sqrt(v2025 * v2026) * (1 + growth)
+
+
+def build_timeline(code: str, totals_2025: dict, totals_2026: dict,
+                   rp100: float, extra: dict) -> dict:
+    """Per-metric series across 2025, 2026 and one projected year.
+
+    One entry per metric so the chart can follow whichever question the reader
+    picked, instead of being locked to population.
+    """
+    g = EXPOSURE_GROWTH.get(code, 0.01)
+    observed_pop = totals_2026.get("affected_pop_total", 0.0)
+    ead, exponent = expected_annual_impact(observed_pop, rp100)
+
+    metrics = {}
+    for key, label in TIMELINE_METRICS:
+        v25 = float(totals_2025.get(key, 0.0) or 0.0)
+        v26 = float(totals_2026.get(key, 0.0) or 0.0)
+        central = project_next_year(v25, v26, g)
+        metrics[key] = {
+            "label": label,
+            "points": [
+                {"year": 2025, "value": v25, "kind": "observed"},
+                {"year": 2026, "value": v26, "kind": "observed"},
+                {
+                    "year": 2027,
+                    "value": central,
+                    # Band spans half to double the assumed growth, floored at
+                    # the milder observed year and capped at the severe one —
+                    # next year is not expected to beat either record.
+                    "low": max(min(v25, v26), central * (1 - g * 4)),
+                    "high": min(max(v25, v26), central * (1 + g * 4)),
+                    "kind": "projected",
+                },
+            ],
+        }
 
     return {
-        "observed": [
-            {"year": 2025, "track": "baseline", "value": baseline_2025,
-             "label": "People living in flood-prone land"},
-            {"year": 2026, "track": "event", "value": observed,
-             "label": "People hit by the July 2026 flood",
-             "window": [EVENT_START, EVENT_END]},
-        ],
+        "metrics": metrics,
         "expected_annual": ead,
-        "projected": projected,
         "scenario": {
             "label": "1-in-100-year flood",
             "value": rp100,
@@ -323,11 +364,10 @@ def build_timeline(code: str, baseline_2025: float, observed: float,
         "assumptions": {
             "exposure_growth_pct_per_year": round(g * 100, 2),
             "severity_exponent": round(exponent, 3),
-            "observed_return_period_years": 2,
-            "note": ("Projection = expected annual impact grown by the assumed "
-                     "annual increase in flood-exposed population. Band spans "
-                     "half to double that rate. Not a forecast of any single "
-                     "flood."),
+            "method": "geometric mean of the two observed years × exposure growth",
+            "note": ("2027 is an expected typical year, not a forecast of any "
+                     "single flood. 2025 and 2026 were very different flood "
+                     "years; the projection sits between them."),
         },
     }
 
@@ -453,8 +493,13 @@ def process(code: str, facts: dict[str, dict]) -> dict:
         json.dumps(rows, separators=(",", ":")), encoding="utf-8")
 
     measured_extent = sum(flood_km2.values())
-    baseline_2025 = sum((d.get("affected_pop_total") or 0.0) for d in base.values())
     rp100 = f.get("rp100_15m_pop") or 0.0
+
+    def sum_field(table: dict, key: str) -> float:
+        return sum(float(d.get(key) or 0.0) for d in table.values())
+
+    totals_2025 = {k: sum_field(base, k) for k, _ in TIMELINE_METRICS}
+    totals_2026 = {k: sum_field(rows, k) for k, _ in TIMELINE_METRICS}
 
     event = {
         "event_id": EVENT_ID,
@@ -488,7 +533,7 @@ def process(code: str, facts: dict[str, dict]) -> dict:
     (cdir / f"event-{EVENT_ID}.json").write_text(
         json.dumps(event, separators=(",", ":")), encoding="utf-8")
 
-    timeline = build_timeline(code, baseline_2025, nat_pop, rp100, f)
+    timeline = build_timeline(code, totals_2025, totals_2026, rp100, f)
     (cdir / "timeline.json").write_text(
         json.dumps(timeline, separators=(",", ":")), encoding="utf-8")
 

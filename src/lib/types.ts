@@ -248,24 +248,23 @@ export interface PdmaPoint {
 
 export interface TimelinePoint {
   year: number;
-  track: YearKind;
   value: number;
-  label: string;
-  window?: [string, string];
+  kind: 'observed' | 'projected';
+  /** Present on projected points only. */
+  low?: number;
+  high?: number;
 }
 
-export interface ProjectedPoint {
-  year: number;
-  central: number;
-  low: number;
-  high: number;
+export interface TimelineMetric {
+  label: string;
+  points: TimelinePoint[];
 }
 
 export interface Timeline {
-  observed: TimelinePoint[];
+  /** Keyed by MetricKey — only fields measured in both years appear. */
+  metrics: Record<string, TimelineMetric>;
   /** Expected people affected per year, integrated over the severity curve. */
   expected_annual: number;
-  projected: ProjectedPoint[];
   scenario: {
     label: string;
     value: number;
@@ -276,7 +275,7 @@ export interface Timeline {
   assumptions: {
     exposure_growth_pct_per_year: number;
     severity_exponent: number;
-    observed_return_period_years: number;
+    method: string;
     note: string;
   };
 }

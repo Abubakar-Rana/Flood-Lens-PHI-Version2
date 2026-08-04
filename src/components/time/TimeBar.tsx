@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import {
-  Area, ComposedChart, Line, ReferenceDot, ReferenceLine,
+  Area, ComposedChart, LabelList, Line, ReferenceLine,
   ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from 'recharts';
 import { ChevronDown, Info, Radio, Waves } from 'lucide-react';
@@ -14,11 +14,11 @@ import {
 } from '@/lib/types';
 import { formatBig, formatInt, statsForLevel } from '@/lib/utils';
 
-/** Axis-tick form: always short enough to fit a 40px gutter. */
+/** Axis-tick form: always short enough to fit a narrow gutter. */
 function compactTick(v: number): string {
   if (!isFinite(v)) return '';
   const a = Math.abs(v);
-  if (a >= 1_000_000) return `${(v / 1_000_000).toFixed(1)}M`;
+  if (a >= 1_000_000) return `${(v / 1_000_000).toFixed(a >= 10_000_000 ? 0 : 1)}M`;
   if (a >= 1_000) return `${Math.round(v / 1_000)}K`;
   return String(Math.round(v));
 }
@@ -77,8 +77,7 @@ export default function TimeBar({ isDark }: { isDark: boolean }) {
     return { name: country?.name ?? '', row: null, isRegion: false };
   }, [stats, app.selectedRegionId, country]);
 
-  const lenses = useMemo(
-    () => lensesForKind(year?.kind ?? 'event'), [year]);
+  const lenses = useMemo(() => lensesForKind(year?.kind ?? 'event'), [year]);
 
   const valueFor = (lens: LensDef): number => {
     const key = lens.metric as string;
@@ -89,55 +88,51 @@ export default function TimeBar({ isDark }: { isDark: boolean }) {
     return total(stats, key);
   };
 
-  // A selected region carries its share of the national timeline, so the
-  // projection reads for that place rather than resetting to the country.
+  // A selected region carries its share of the national series, so the chart
+  // reads for that place rather than snapping back to the country.
   const regionShare = useMemo(() => {
     if (!scope?.row || !stats) return 1;
-    const nat = total(stats, 'affected_pop_total');
-    const own = (scope.row.affected_pop_total as number) ?? 0;
+    const key = app.metric as string;
+    const nat = total(stats, key);
+    const own = (scope.row[key] as number) ?? 0;
     return nat > 0 ? own / nat : 0;
-  }, [scope, stats]);
+  }, [scope, stats, app.metric]);
 
-  const bg = isDark ? 'rgba(17,17,17,0.93)' : 'rgba(255,255,255,0.95)';
+  const bg = isDark ? '#111' : '#fff';
   const border = isDark ? '#2e2e2e' : '#d6e0eb';
   const tp = isDark ? '#fff' : '#111';
   const ts = isDark ? '#aaa' : '#444';
   const tm = isDark ? '#666' : '#888';
 
   return (
-    <div
-      className="absolute top-3 left-3 right-3 z-[1000]"
-      style={{
-        background: bg, border: `1px solid ${border}`, borderRadius: 14,
-        backdropFilter: 'blur(14px)',
-        boxShadow: isDark ? '0 6px 28px rgba(0,0,0,0.45)' : '0 6px 24px rgba(20,40,70,0.12)',
-        overflow: 'hidden',
-      }}
-    >
+    <div style={{
+      flexShrink: 0, background: bg, borderBottom: `1px solid ${border}`,
+      display: 'flex', flexDirection: 'column',
+    }}>
       {/* ── Title row: place, event window, year track ───────────────── */}
       <div style={{
-        display: 'flex', alignItems: 'center', gap: 12, padding: '8px 12px',
-        borderBottom: collapsed ? 'none' : `1px solid ${border}`,
+        display: 'flex', alignItems: 'center', gap: 12, padding: '8px 14px',
+        borderBottom: collapsed ? 'none' : `1px solid ${border}`, flexWrap: 'wrap',
       }}>
-        <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ flex: '1 1 220px', minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
-            <span style={{ color: tp, fontSize: 15, fontWeight: 800, letterSpacing: '-0.01em' }}>
+            <span style={{ color: tp, fontSize: 16, fontWeight: 800, letterSpacing: '-0.01em' }}>
               {scope?.name || '—'}
             </span>
             {scope?.isRegion && (
               <button
                 onClick={() => app.selectRegion(null)}
                 style={{
-                  padding: '1px 7px', borderRadius: 10, fontSize: 9, fontWeight: 700,
+                  padding: '2px 8px', borderRadius: 10, fontSize: 9, fontWeight: 700,
                   background: 'rgba(200,169,81,0.16)', border: '1px solid rgba(200,169,81,0.4)',
-                  color: '#c8a951', cursor: 'pointer', letterSpacing: '0.04em',
+                  color: isDark ? '#c8a951' : '#8a6914', cursor: 'pointer', letterSpacing: '0.04em',
                 }}
               >
-                SHOWING THIS AREA · BACK TO WHOLE COUNTRY
+                BACK TO WHOLE COUNTRY
               </button>
             )}
           </div>
-          <div style={{ color: tm, fontSize: 10, marginTop: 1 }}>
+          <div style={{ color: tm, fontSize: 10.5, marginTop: 1 }}>
             {year?.headline}
             {year?.window && ` · ${year.window.start} to ${year.window.end}`}
           </div>
@@ -153,7 +148,7 @@ export default function TimeBar({ isDark }: { isDark: boolean }) {
                 onClick={() => app.setYear(y.id)}
                 title={y.blurb}
                 style={{
-                  padding: '5px 12px', borderRadius: 8, fontSize: 11,
+                  padding: '6px 13px', borderRadius: 8, fontSize: 11.5,
                   fontWeight: active ? 800 : 600, cursor: 'pointer',
                   background: active ? '#c8a951' : 'transparent',
                   color: active ? '#1a1200' : ts,
@@ -173,10 +168,10 @@ export default function TimeBar({ isDark }: { isDark: boolean }) {
             title="Show the satellite flood extent on the map"
             style={{
               display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0,
-              padding: '5px 10px', borderRadius: 8, fontSize: 10, fontWeight: 700,
+              padding: '6px 11px', borderRadius: 8, fontSize: 10.5, fontWeight: 700,
               cursor: 'pointer',
               background: app.showExtent ? 'rgba(56,189,248,0.16)' : 'transparent',
-              color: app.showExtent ? '#38bdf8' : ts,
+              color: app.showExtent ? (isDark ? '#38bdf8' : '#0369a1') : ts,
               border: `1px solid ${app.showExtent ? '#38bdf8' : border}`,
             }}
           >
@@ -188,7 +183,7 @@ export default function TimeBar({ isDark }: { isDark: boolean }) {
           onClick={() => setCollapsed(c => !c)}
           title={collapsed ? 'Show numbers' : 'Hide numbers'}
           style={{
-            flexShrink: 0, padding: 5, borderRadius: 7, cursor: 'pointer',
+            flexShrink: 0, padding: 6, borderRadius: 7, cursor: 'pointer',
             background: 'transparent', border: `1px solid ${border}`, color: tm,
             display: 'flex', alignItems: 'center',
           }}
@@ -200,12 +195,12 @@ export default function TimeBar({ isDark }: { isDark: boolean }) {
       </div>
 
       {!collapsed && (
-        <div style={{ display: 'flex', alignItems: 'stretch', gap: 12, padding: '10px 12px' }}>
+        <div className="timebar-body" style={{ padding: '10px 14px 12px' }}>
           {/* ── Headline numbers. Each tile is also the map's colour control ── */}
-          <div style={{ flex: '1 1 auto', minWidth: 0 }}>
+          <div style={{ minWidth: 0 }}>
             <div style={{
-              display: 'grid', gap: 7,
-              gridTemplateColumns: `repeat(${lenses.length}, minmax(0, 1fr))`,
+              display: 'grid', gap: 8,
+              gridTemplateColumns: `repeat(auto-fit, minmax(112px, 1fr))`,
             }}>
               {lenses.map(lens => {
                 const active = app.lens === lens.key;
@@ -216,7 +211,7 @@ export default function TimeBar({ isDark }: { isDark: boolean }) {
                     onClick={() => app.setLens(lens.key)}
                     title={lens.question}
                     style={{
-                      textAlign: 'left', padding: '8px 10px', borderRadius: 10,
+                      textAlign: 'left', padding: '9px 11px', borderRadius: 10,
                       cursor: 'pointer', minWidth: 0,
                       background: active ? `${lens.color}1f` : (isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.025)'),
                       border: `1px solid ${active ? lens.color : border}`,
@@ -225,7 +220,7 @@ export default function TimeBar({ isDark }: { isDark: boolean }) {
                   >
                     <div style={{
                       color: active ? lens.color : tp,
-                      fontSize: 26, fontWeight: 800, lineHeight: 1.05,
+                      fontSize: 27, fontWeight: 800, lineHeight: 1.05,
                       letterSpacing: '-0.02em', fontVariantNumeric: 'tabular-nums',
                       overflow: 'hidden', textOverflow: 'ellipsis',
                     }}>
@@ -246,14 +241,14 @@ export default function TimeBar({ isDark }: { isDark: boolean }) {
               })}
             </div>
             <div style={{
-              display: 'flex', alignItems: 'center', gap: 5, marginTop: 6,
-              color: tm, fontSize: 9.5,
+              display: 'flex', alignItems: 'center', gap: 5, marginTop: 7,
+              color: tm, fontSize: 9.5, flexWrap: 'wrap',
             }}>
               <Info size={10} />
               Tap any number to colour the map by it.
               {year?.kind === 'event' && event && (
-                <span style={{ marginLeft: 'auto' }}>
-                  {event.measured.districts_flooded} of {event.measured.districts_total} districts
+                <span>
+                  · {event.measured.districts_flooded} of {event.measured.districts_total} districts
                   saw flooding · hospitals &amp; schools counted within{' '}
                   {event.measured.proximity_radius_km} km of flood water
                 </span>
@@ -262,183 +257,195 @@ export default function TimeBar({ isDark }: { isDark: boolean }) {
           </div>
 
           {/* ── The timeline. Clicking a year repaints the map. ───────────── */}
-          <div style={{
-            flex: '0 0 400px', minWidth: 300, borderLeft: `1px solid ${border}`,
-            paddingLeft: 12,
-          }}>
+          <div className="timebar-chart" style={{ borderLeft: `1px solid ${border}`, paddingLeft: 14, minWidth: 0 }}>
             <TrendChart
               timeline={timeline}
+              metricKey={app.metric}
               share={regionShare}
               scrubYear={app.scrubYear}
               onScrub={app.setScrubYear}
               isDark={isDark}
               scopeName={scope?.name ?? ''}
+              accent={app.lens ? lenses.find(l => l.key === app.lens)?.color ?? '#c8a951' : '#c8a951'}
             />
           </div>
         </div>
       )}
+
+      <style>{`
+        .timebar-body {
+          display: grid;
+          grid-template-columns: minmax(0, 1fr) minmax(340px, 42%);
+          gap: 14px;
+          align-items: stretch;
+        }
+        /* Below this the two columns can no longer both breathe — stack them
+           and let the chart keep its full height rather than squeezing it. */
+        @media (max-width: 1180px) {
+          .timebar-body { grid-template-columns: minmax(0, 1fr); }
+          .timebar-chart { border-left: none !important; padding-left: 0 !important; }
+        }
+      `}</style>
     </div>
   );
 }
 
 // ─── Trend chart ──────────────────────────────────────────────────────────
-// One measure, one axis: people affected by flooding. Three things sit on it —
-// the July 2026 flood as it was observed, the expected-per-year risk curve
-// projected forward, and the uncertainty band around that curve. The 2025
-// baseline is deliberately absent: it counts everyone living in a flood-prone
-// zone (33.9M for Pakistan), which is a standing condition rather than an
-// occurrence, and putting it here would read as a 99% crash. It has its own
-// tile row instead. The 1-in-100-year figure is likewise kept off this axis —
-// at ~24x the projection it would flatten the curve to a straight line — and
-// is called out as a separate scenario number.
+// One measure, one axis, three years. Both observed years carry the SAME
+// field (whichever the reader picked), which is why only fields present in
+// both stats tables get a series — "land flooded" has no 2025 counterpart and
+// is excluded upstream in the ETL.
+//
+// The two observed years differ by 5x (Bangladesh) to 269x (Nepal), so every
+// point is direct-labelled: on a linear axis the smaller year would otherwise
+// sit on the baseline and read as zero. The 1-in-100-year figure stays off
+// this axis — at ~24x the projection it would flatten everything else — and
+// is called out as its own scenario card in the right panel.
 
 function TrendChart({
-  timeline, share, scrubYear, onScrub, isDark, scopeName,
+  timeline, metricKey, share, scrubYear, onScrub, isDark, scopeName, accent,
 }: {
   timeline: Timeline | null;
+  metricKey: string;
   share: number;
   scrubYear: number;
   onScrub: (y: number) => void;
   isDark: boolean;
   scopeName: string;
+  accent: string;
 }) {
   const tp = isDark ? '#fff' : '#111';
   const tm = isDark ? '#666' : '#888';
-  const grid = isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.07)';
+  const grid = isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.08)';
   const surface = isDark ? '#111' : '#fff';
 
-  const data = useMemo(() => {
-    if (!timeline) return [];
-    const obs = timeline.observed.find(o => o.track === 'event');
-    if (!obs) return [];
-    const rows = [{
-      year: obs.year,
-      observed: obs.value * share,
-      central: timeline.expected_annual * share,
-      band: [timeline.expected_annual * share, timeline.expected_annual * share] as [number, number],
-    }];
-    for (const p of timeline.projected) {
-      rows.push({
-        year: p.year,
-        observed: NaN,
-        central: p.central * share,
-        band: [p.low * share, p.high * share] as [number, number],
-      });
-    }
-    return rows;
-  }, [timeline, share]);
+  const series = timeline?.metrics?.[metricKey] ?? null;
 
-  if (!timeline || data.length === 0) {
+  const data = useMemo(() => {
+    if (!series) return [];
+    return series.points.map(p => ({
+      year: p.year,
+      value: p.value * share,
+      observed: p.kind === 'observed' ? p.value * share : null,
+      band: p.kind === 'projected' && p.low != null && p.high != null
+        ? [p.low * share, p.high * share] as [number, number]
+        : null,
+      kind: p.kind,
+    }));
+  }, [series, share]);
+
+  if (!timeline) {
     return <div style={{ color: tm, fontSize: 10, padding: 8 }}>Loading timeline…</div>;
   }
-
-  const observedYear = data[0].year;
-  const active = data.find(d => d.year === scrubYear) ?? data[0];
-  const isProjected = scrubYear > observedYear;
+  if (!series || data.length === 0) {
+    return (
+      <div style={{ color: tm, fontSize: 10.5, padding: '18px 8px', lineHeight: 1.6 }}>
+        No year-on-year series for this measure — <strong style={{ color: tp }}>land flooded</strong>{' '}
+        is only measured during an observed flood, so there is no 2025 figure to compare against.
+        Pick <strong style={{ color: tp }}>People</strong> or <strong style={{ color: tp }}>Children</strong>{' '}
+        to see the trend.
+      </div>
+    );
+  }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
-        <span style={{ color: tp, fontSize: 10, fontWeight: 800, letterSpacing: '0.05em' }}>
-          PEOPLE AFFECTED PER YEAR
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 172 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3, flexWrap: 'wrap' }}>
+        <span style={{ color: tp, fontSize: 10.5, fontWeight: 800, letterSpacing: '0.05em' }}>
+          {series.label.toUpperCase()} — YEAR BY YEAR
         </span>
         <span style={{
           display: 'inline-flex', alignItems: 'center', gap: 3,
-          color: '#22c55e', fontSize: 8.5, fontWeight: 700, letterSpacing: '0.06em',
+          color: '#16a34a', fontSize: 8.5, fontWeight: 700, letterSpacing: '0.06em',
         }}>
           <Radio size={9} className="pulse-dot" /> LIVE
         </span>
-        <span style={{ marginLeft: 'auto', color: tm, fontSize: 9 }}>
-          {isProjected ? 'projected' : 'observed'} · {scrubYear}
+        <span style={{ marginLeft: 'auto', color: tm, fontSize: 9.5 }}>
+          {scrubYear >= 2027 ? 'projected' : 'observed'} · {scrubYear}
         </span>
       </div>
 
-      <div style={{ flex: 1, minHeight: 84 }}>
+      <div style={{ flex: 1, minHeight: 130 }}>
         <ResponsiveContainer width="100%" height="100%">
           <ComposedChart
             data={data}
-            margin={{ top: 8, right: 10, bottom: 0, left: -14 }}
+            margin={{ top: 20, right: 22, bottom: 2, left: -6 }}
             onClick={(e: { activeLabel?: string | number }) => {
               const y = Number(e?.activeLabel);
               if (isFinite(y)) onScrub(y);
             }}
             style={{ cursor: 'pointer' }}
           >
-            {/* Uncertainty band — half to double the assumed growth rate. */}
+            {/* Plausible range for the projected year. */}
             <Area
-              dataKey="band" stroke="none" fill="#c8a951" fillOpacity={0.14}
-              isAnimationActive animationDuration={700} legendType="none"
+              dataKey="band" stroke="none" fill={accent} fillOpacity={0.16}
+              isAnimationActive animationDuration={600} connectNulls
             />
-            {/* Expected people affected per year. Dashed = modelled, not seen. */}
+            {/* Full series. Solid through the observed years; the reference
+                line below marks where measurement stops and modelling starts. */}
             <Line
-              dataKey="central" stroke="#c8a951" strokeWidth={2}
-              strokeDasharray="5 4" dot={false} isAnimationActive
-              animationDuration={900} name="Expected per year"
-            />
-            {/* The one point that actually happened. */}
-            <Line
-              dataKey="observed" stroke="#c8a951" strokeWidth={2}
-              dot={{ r: 5, fill: '#c8a951', stroke: surface, strokeWidth: 2 }}
-              isAnimationActive animationDuration={500} name="Observed flood"
-              connectNulls={false}
-            />
+              dataKey="value" stroke={accent} strokeWidth={2.5}
+              dot={{ r: 5, fill: accent, stroke: surface, strokeWidth: 2 }}
+              activeDot={{ r: 7 }}
+              isAnimationActive animationDuration={800} name="Affected"
+            >
+              <LabelList
+                dataKey="value" position="top" offset={10}
+                formatter={((v: number) => compactTick(v)) as never}
+                style={{ fill: tp, fontSize: 11, fontWeight: 800 }}
+              />
+            </Line>
             <ReferenceLine
-              x={scrubYear} stroke="#c8a951" strokeWidth={1} strokeOpacity={0.5}
+              x={2026.5} stroke={tm} strokeWidth={1} strokeOpacity={0.45}
+              label={{ value: 'projected →', position: 'insideTopRight',
+                       fill: tm, fontSize: 9 }}
             />
-            <ReferenceDot
-              x={active.year} y={active.central} r={4}
-              fill="#c8a951" stroke={surface} strokeWidth={2}
-            />
+            {scrubYear >= 2025 && scrubYear <= 2027 && (
+              <ReferenceLine x={scrubYear} stroke={accent} strokeWidth={1} strokeOpacity={0.4} />
+            )}
             <XAxis
-              dataKey="year" tick={{ fontSize: 9, fill: tm }}
+              dataKey="year" tick={{ fontSize: 11, fill: tm, fontWeight: 600 }}
               axisLine={{ stroke: grid }} tickLine={false} interval={0}
+              type="number" domain={[2024.7, 2027.3]} ticks={[2025, 2026, 2027]}
             />
             <YAxis
-              tick={{ fontSize: 9, fill: tm }} width={40}
+              tick={{ fontSize: 9, fill: tm }} width={44}
               axisLine={false} tickLine={false}
-              // Axis ticks get the abbreviated form; grouped digits at this
-              // size clip to something that reads as a different number.
-              // The tooltip carries the exact value.
               tickFormatter={compactTick}
             />
             <Tooltip
-              cursor={{ stroke: '#c8a951', strokeWidth: 1, strokeOpacity: 0.35 }}
+              cursor={{ stroke: accent, strokeWidth: 1, strokeOpacity: 0.35 }}
               contentStyle={{
-                fontSize: 11, background: surface, border: `1px solid ${grid}`,
+                fontSize: 11.5, background: surface, border: `1px solid ${grid}`,
                 borderRadius: 8,
               }}
               labelStyle={{ color: tp, fontWeight: 700 }}
               formatter={((v: unknown, name: unknown) => {
                 if (Array.isArray(v)) {
-                  return [`${formatInt(v[0] as number)} – ${formatInt(v[1] as number)}`, 'Range'];
+                  return [`${formatInt(v[0] as number)} – ${formatInt(v[1] as number)}`, 'Likely range'];
                 }
                 const n = Number(v);
-                return isFinite(n) ? [formatInt(n), String(name)] : [null, null];
+                if (!isFinite(n)) return [null, null];
+                return [formatInt(n), String(name)];
               }) as never}
             />
           </ComposedChart>
         </ResponsiveContainer>
       </div>
 
-      {/* Legend — identity is never colour alone, so the dash pattern is
-          named in words as well as drawn. */}
       <div style={{
-        display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
-        color: tm, fontSize: 8.5, marginTop: 2,
+        display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap',
+        color: tm, fontSize: 9, marginTop: 3,
       }}>
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-          <span style={{ width: 9, height: 9, borderRadius: '50%', background: '#c8a951' }} />
-          What happened ({observedYear})
+          <span style={{ width: 9, height: 9, borderRadius: '50%', background: accent }} />
+          Measured (2025, 2026)
         </span>
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-          <span style={{
-            width: 14, height: 0, borderTop: '2px dashed #c8a951', display: 'inline-block',
-          }} />
-          Expected per year (modelled)
+          <span style={{ width: 12, height: 9, borderRadius: 2, background: accent, opacity: 0.3 }} />
+          2027 expected, likely range
         </span>
-        <span style={{ marginLeft: 'auto', color: tm }}>
-          Click a year to map it
-        </span>
+        <span style={{ marginLeft: 'auto' }}>Click a year to map it</span>
       </div>
 
       <style>{`
@@ -446,8 +453,7 @@ function TrendChart({
         @keyframes pulse-fade { 0%,100% { opacity: 1; } 50% { opacity: 0.25; } }
       `}</style>
       <span className="sr-only">
-        Expected people affected per year in {scopeName}, {observedYear} to{' '}
-        {data[data.length - 1].year}.
+        {series.label} in {scopeName}: {data.map(d => `${d.year} ${Math.round(d.value)}`).join(', ')}.
       </span>
     </div>
   );

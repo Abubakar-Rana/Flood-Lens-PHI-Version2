@@ -199,13 +199,20 @@ export function statsForLevel(districtStats: StatsTable, level: 'admin0' | 'admi
 // geography of who gets hit stays put) is what the map is showing, and the
 // UI says so wherever a projected year is active.
 
-export function projectionFactor(timeline: Timeline | null, scrubYear: number): number {
+/** Ratio between a projected year and the year whose stats table is loaded.
+ *  Uses the series for `metricKey` so the map scales by the same measure the
+ *  reader is looking at. Returns 1 for observed years (a no-op). */
+export function projectionFactor(
+  timeline: Timeline | null, scrubYear: number,
+  metricKey = 'affected_pop_total', loadedYear = 2026,
+): number {
   if (!timeline) return 1;
-  const observed = timeline.observed.find(o => o.track === 'event');
-  if (!observed || observed.value <= 0 || scrubYear <= observed.year) return 1;
-  const p = timeline.projected.find(x => x.year === scrubYear);
-  if (!p) return 1;
-  return p.central / observed.value;
+  const series = timeline.metrics?.[metricKey];
+  if (!series) return 1;
+  const base = series.points.find(p => p.year === loadedYear);
+  const target = series.points.find(p => p.year === scrubYear);
+  if (!base || !target || base.value <= 0 || target.kind !== 'projected') return 1;
+  return target.value / base.value;
 }
 
 // Only population-derived fields scale. Land under water and facility counts

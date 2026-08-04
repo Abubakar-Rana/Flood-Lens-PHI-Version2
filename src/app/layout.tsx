@@ -8,8 +8,11 @@ export const metadata: Metadata = {
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+  // data-theme is set on the server so the first paint is already light.
+  // ThemeProvider rewrites the attribute on toggle; without it the CSS
+  // `:root` default renders dark for a frame before hydration catches up.
   return (
-    <html lang="en" style={{ height: '100%' }}>
+    <html lang="en" data-theme="light" style={{ height: '100%' }}>
       <body
         className="antialiased"
         style={{

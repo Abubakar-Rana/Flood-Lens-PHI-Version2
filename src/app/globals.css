@@ -213,9 +213,13 @@ body {
 .flood-extent-overlay {
   image-rendering: pixelated;
   image-rendering: crisp-edges;
-  mix-blend-mode: screen;
+  /* Straight alpha compositing on purpose. A screen/multiply blend mixes the
+     cyan into whatever choropleth step is underneath, so the water changed
+     colour every time the user switched metric and vanished over the light
+     end of the ramp. The water is an observation — it should look the same
+     regardless of what the districts are shaded by. */
+  filter: drop-shadow(0 0 1px rgba(2, 132, 199, 0.9));
 }
-[data-theme="light"] .flood-extent-overlay { mix-blend-mode: multiply; }
 
 /* Screen-reader-only text (chart summaries) */
 .sr-only {

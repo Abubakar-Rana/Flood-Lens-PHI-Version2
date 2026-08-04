@@ -40,8 +40,9 @@ export default function MapComponent({ isDark, onStatsLoaded }: MapComponentProp
   // values; on an observed year the factor is exactly 1 and this is a no-op.
   const stats = useMemo(() => {
     if (!rawStats) return null;
-    return projectStats(rawStats, projectionFactor(timeline, app.scrubYear));
-  }, [rawStats, timeline, app.scrubYear]);
+    const f = projectionFactor(timeline, app.scrubYear, app.metric, Number(app.year));
+    return projectStats(rawStats, f);
+  }, [rawStats, timeline, app.scrubYear, app.metric, app.year]);
   // Latest filter view for layer event handlers (created once, read fresh).
   const stateSnap = useRef(app);
   stateSnap.current = app;

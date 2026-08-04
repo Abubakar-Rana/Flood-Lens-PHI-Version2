@@ -58,10 +58,16 @@ function Dashboard() {
         <LoadingBar />
         <Sidebar />
 
-        <main style={{ position: 'relative', flex: 1, overflow: 'hidden' }}>
-          <MapComponent isDark={isDark} />
-          <MapOverlay isDark={isDark} />
+        {/* The bar sits in the flow above the map rather than floating over
+            it — the map shrinks to fit, so nothing the reader clicks is ever
+            hidden underneath a panel. */}
+        <main style={{ position: 'relative', flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
           <TimeBar isDark={isDark} />
+
+          <div style={{ position: 'relative', flex: 1, minHeight: 0 }}>
+            <MapComponent isDark={isDark} />
+            <MapOverlay isDark={isDark} />
+          </div>
 
           <button
             onClick={() => setStatsVisible(v => !v)}

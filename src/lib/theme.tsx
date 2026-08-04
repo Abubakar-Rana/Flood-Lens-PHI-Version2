@@ -5,10 +5,10 @@ import { createContext, useContext, useState, useEffect, ReactNode } from 'react
 type Theme = 'dark' | 'light';
 interface ThemeContextType { theme: Theme; toggleTheme: () => void; isDark: boolean; }
 
-const ThemeContext = createContext<ThemeContextType>({ theme: 'dark', toggleTheme: () => {}, isDark: true });
+const ThemeContext = createContext<ThemeContextType>({ theme: 'light', toggleTheme: () => {}, isDark: false });
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [theme, setTheme] = useState<Theme>('dark');
+  const [theme, setTheme] = useState<Theme>('light');
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);

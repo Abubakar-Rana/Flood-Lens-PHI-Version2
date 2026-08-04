@@ -49,8 +49,9 @@ export default function StatsPanel() {
 
   const stats = useMemo(() => {
     if (!rawStats) return null;
-    return projectStats(rawStats, projectionFactor(timeline, app.scrubYear));
-  }, [rawStats, timeline, app.scrubYear]);
+    const f = projectionFactor(timeline, app.scrubYear, app.metric, Number(app.year));
+    return projectStats(rawStats, f);
+  }, [rawStats, timeline, app.scrubYear, app.metric, app.year]);
 
   const activeStats: StatsTable | null = useMemo(
     () => stats ? statsForLevel(stats, app.level) : null, [stats, app.level]);
