@@ -17,6 +17,15 @@ interface MapComponentProps {
 
 const LEVEL_TO_NUM: Record<AdminLevel, 0 | 1 | 2> = { admin0: 0, admin1: 1, admin2: 2 };
 
+// CARTO started watermarking unauthenticated raster tiles with "API KEY
+// REQUIRED" in Aug 2026. A key is free (5M tiles/month, attribution must stay
+// visible) and takes a minute to get: https://carto.com/basemaps/apikey
+// Put it in .env.local as NEXT_PUBLIC_CARTO_KEY=... and restart the dev server.
+const CARTO_KEY = process.env.NEXT_PUBLIC_CARTO_KEY ?? '';
+const basemapUrl = (dark: boolean) =>
+  `https://{s}.basemaps.cartocdn.com/${dark ? 'dark_all' : 'light_all'}/{z}/{x}/{y}{r}.png`
+  + (CARTO_KEY ? `?key=${CARTO_KEY}` : '');
+
 export default function MapComponent({ isDark, onStatsLoaded }: MapComponentProps) {
   const app = useApp();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -25,6 +34,12 @@ export default function MapComponent({ isDark, onStatsLoaded }: MapComponentProp
   const boundaryRef = useRef<LType.GeoJSON | null>(null);
   const extentRef = useRef<LType.ImageOverlay | null>(null);
   const pointLayersRef = useRef<Record<string, LType.LayerGroup>>({});
+  // The one polygon that currently owns a tooltip. Leaflet binds tooltips
+  // per layer, so a mouseout that never arrives (fast drags, or the
+  // bringToFront() below reordering the SVG mid-dispatch) used to leave the
+  // old box on screen and let them pile up. Entering any polygon now closes
+  // the previous one explicitly.
+  const hoveredRef = useRef<LType.Path | null>(null);
   const [rawStats, setRawStats] = useState<StatsTable | null>(null);  // district-keyed
   const [country, setCountry] = useState<CountryInfo | null>(null);
   const [years, setYears] = useState<YearDef[]>([]);
@@ -64,10 +79,7 @@ export default function MapComponent({ isDark, onStatsLoaded }: MapComponentProp
       });
       L.control.zoom({ position: 'topright' }).addTo(map);
       mapRef.current = map;
-      const url = isDark
-        ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
-        : 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
-      tileRef.current = L.tileLayer(url, { attribution: ATTRIBUTION, subdomains: 'abcd', maxZoom: 14 });
+      tileRef.current = L.tileLayer(basemapUrl(isDark), { attribution: ATTRIBUTION, subdomains: 'abcd', maxZoom: 14 });
       tileRef.current.addTo(map);
       // Every layer effect below bails when the map is missing. Leaflet is
       // imported lazily, so on a warm cache the data effects settle first and
@@ -86,10 +98,7 @@ export default function MapComponent({ isDark, onStatsLoaded }: MapComponentProp
     (async () => {
       const L = (await import('leaflet')).default;
       map.removeLayer(tile);
-      const url = isDark
-        ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
-        : 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
-      tileRef.current = L.tileLayer(url, { attribution: ATTRIBUTION, subdomains: 'abcd', maxZoom: 14 });
+      tileRef.current = L.tileLayer(basemapUrl(isDark), { attribution: ATTRIBUTION, subdomains: 'abcd', maxZoom: 14 });
       tileRef.current.addTo(map);
     })();
   }, [isDark]);
@@ -179,6 +188,20 @@ export default function MapComponent({ isDark, onStatsLoaded }: MapComponentProp
     return () => { alive = false; };
   }, [extentInfo, app.showExtent, mapReady]);
 
+  // Close + unbind whatever polygon is hovered, and restore its fill.
+  // unbind (not just close) also strips Leaflet's own tooltip mouseover
+  // handlers, so a stale box can't reopen itself.
+  const clearHover = () => {
+    const prev = hoveredRef.current;
+    hoveredRef.current = null;
+    if (!prev) return;
+    prev.closeTooltip();
+    prev.unbindTooltip();
+    try { boundaryRef.current?.resetStyle(prev); } catch { /* layer already torn down */ }
+  };
+  const clearHoverRef = useRef(clearHover);
+  clearHoverRef.current = clearHover;
+
   // ── Render boundary choropleth ────────────────────────────────────
   useEffect(() => {
     if (!mapRef.current || !stats || !country) return;
@@ -225,6 +248,11 @@ export default function MapComponent({ isDark, onStatsLoaded }: MapComponentProp
 
       // Tear down old boundary layer
       if (boundaryRef.current) {
+        // Drop the hover tooltip with the layer that owns it, or it outlives
+        // the rebuild as an orphan box.
+        hoveredRef.current?.closeTooltip();
+        hoveredRef.current?.unbindTooltip();
+        hoveredRef.current = null;
         mapRef.current.removeLayer(boundaryRef.current);
         boundaryRef.current = null;
       }
@@ -256,6 +284,11 @@ export default function MapComponent({ isDark, onStatsLoaded }: MapComponentProp
           path.on({
             mouseover(e: LType.LeafletEvent) {
               const t = e.target as LType.Path;
+              // Re-entrant mouseover on the same polygon (bringToFront moves the
+              // SVG node, which makes the browser re-fire it): nothing to redo.
+              if (hoveredRef.current === t) return;
+              clearHoverRef.current();
+              hoveredRef.current = t;
               t.setStyle({ weight: 2.5, color: '#facc15' });
               t.bringToFront();
               const curStats = statsForLevel(statsSnap.current ?? {}, stateSnap.current.level);
@@ -286,9 +319,8 @@ export default function MapComponent({ isDark, onStatsLoaded }: MapComponentProp
               path.bindTooltip(html, { direction: 'top', offset: [0, -4], sticky: true }).openTooltip();
             },
             mouseout(e: LType.LeafletEvent) {
-              const t = e.target as LType.Path;
-              boundaryRef.current?.resetStyle(t);
-              t.closeTooltip();
+              if (hoveredRef.current !== (e.target as LType.Path)) return;
+              clearHoverRef.current();
             },
             click() {
               // Click selects whichever entity the current level shows
